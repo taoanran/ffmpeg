@@ -55,7 +55,8 @@ all: $(PROGS)
 
 $(PROGS): %$(EXESUF): %_g$(EXESUF)
 	$(CP) $< $@
-	$(STRIP) $@
+#taoanran delete it for debug
+#	$(STRIP) $@
 
 $(TOOLS): %$(EXESUF): %.o $(EXEOBJS)
 	$(LD) $(LDFLAGS) $(LD_O) $^ $(ELIBS)

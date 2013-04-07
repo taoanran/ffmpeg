@@ -26,7 +26,7 @@ ALLFFLIBS = avcodec avdevice avfilter avformat avresample avutil postproc swscal
 # NASM requires -I path terminated with /
 IFLAGS     := -I. -I$(SRC_PATH)/
 CPPFLAGS   := $(IFLAGS) $(CPPFLAGS)
-CFLAGS     += $(ECFLAGS)
+CFLAGS     += $(ECFLAGS) -g
 CCFLAGS     = $(CPPFLAGS) $(CFLAGS)
 ASFLAGS    := $(CPPFLAGS) $(ASFLAGS)
 CXXFLAGS   += $(CPPFLAGS) $(CFLAGS)
