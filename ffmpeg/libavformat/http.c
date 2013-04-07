@@ -96,6 +96,16 @@ static const AVClass flavor ## _context_class = {\
 HTTP_CLASS(http);
 HTTP_CLASS(https);
 
+// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++ taoanran add
+#define HTTP_CATCH_DATA 0//taoanran add for catch the http data (1:  catch the data,     2: not catch the data)!!!
+
+#if HTTP_CATCH_DATA
+#define HTTP_CATCH_FILE_TS "/home/taoanran/git/media/ffmpeg/http.ts"
+FILE *m_fp_catch = NULL;
+#endif
+//----------------------------------------------------------
+
+
 static int http_connect(URLContext *h, const char *path, const char *local_path,
                         const char *hoststr, const char *auth,
                         const char *proxyauth, int *new_location);
@@ -226,6 +236,15 @@ int ff_http_do_new_request(URLContext *h, const char *uri)
 
 static int http_open(URLContext *h, const char *uri, int flags)
 {
+#if HTTP_CATCH_DATA
+
+   	m_fp_catch = fopen(HTTP_CATCH_FILE_TS, "ab+");
+   	if (NULL == m_fp_catch)
+   	{
+		av_log(NULL, AV_LOG_ERROR, "[%s] ---------------------- fopen error !!! [%d][%s]\n", __func__, __LINE__, __FILE__);
+      	return -1;
+   	}
+#endif
     HTTPContext *s = h->priv_data;
 
     if( s->seekable == 1 )
@@ -692,7 +711,14 @@ static int http_read(URLContext *h, uint8_t *buf, int size)
         }
         size = FFMIN(size, s->chunksize);
     }
-    return http_buf_read(h, buf, size);
+//    return http_buf_read(h, buf, size);//taoanran delete for catch the data 
+    int ret =  http_buf_read(h, buf, size);
+
+#if HTTP_CATCH_DATA
+   if (m_fp_catch != NULL)
+       fwrite(buf, 1, size, m_fp_catch);
+#endif
+	return ret;
 }
 
 /* used only when posting data */
@@ -750,6 +776,16 @@ static int http_close(URLContext *h)
 
     if (s->hd)
         ffurl_closep(&s->hd);
+
+#if HTTP_CATCH_DATA
+	if (m_fp_catch != NULL)
+	{
+			fclose(m_fp_catch);
+			m_fp_catch = NULL;
+	}
+#endif
+
+
     return ret;
 }
 
