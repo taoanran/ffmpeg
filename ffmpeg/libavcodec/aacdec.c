@@ -120,6 +120,15 @@ static int output_configure(AACContext *ac,
 
 #define overread_err "Input buffer exhausted before END element found\n"
 
+//catch the decoder's data(pcm data)
+#define PCM_AAC_CATCH_DATA 1//taoanran add for catch the pcm data (1:  catch the data,     2: not catch the data)!!!
+
+#if PCM_AAC_CATCH_DATA 
+#define CATCH_FILE "./catch.pcm" 
+FILE *m_fp_catch = NULL;
+#endif
+//---------------------------------------
+
 static int count_channels(uint8_t (*layout)[3], int tags)
 {
     int i, sum = 0;
@@ -967,6 +976,15 @@ static av_cold int aac_decode_init(AVCodecContext *avctx)
     ff_init_ff_sine_windows( 7);
 
     cbrt_tableinit();
+
+#if PCM_AAC_CATCH_DATA
+	m_fp_catch = fopen(CATCH_FILE, "ab+");
+	if (NULL == m_fp_catch) 
+	{
+		av_log(NULL, AV_LOG_ERROR, "[%s] ---------------------- fopen error !!! [%d][%s]\n", __func__, __LINE__, __FILE__);
+		return -1; 
+	}
+#endif
 
     return 0;
 }
@@ -2623,6 +2641,13 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
         avctx->frame_size = samples;
         ac->oc[1].status = OC_LOCKED;
     }
+	
+	//catch the decoder's data(pcm data)
+#if PCM_AAC_CATCH_DATA	
+	if (m_fp_catch != NULL)    
+		fwrite(gb->buffer, 1, gb->buffer_end - gb->buffer, m_fp_catch); 
+#endif
+	//---------------------------------------
 
     if (multiplier) {
         int side_size;
@@ -2710,6 +2735,13 @@ static av_cold int aac_decode_close(AVCodecContext *avctx)
     ff_mdct_end(&ac->mdct);
     ff_mdct_end(&ac->mdct_small);
     ff_mdct_end(&ac->mdct_ltp);
+#if PCM_AAC_CATCH_DATA
+	if (m_fp_catch != NULL)
+	{   
+		fclose(m_fp_catch);     
+		m_fp_catch = NULL;
+	}
+#endif
     return 0;
 }
 
@@ -2980,7 +3012,6 @@ static av_cold int latm_decode_init(AVCodecContext *avctx)
 
     if (avctx->extradata_size > 0)
         latmctx->initialized = !ret;
-
     return ret;
 }
 
