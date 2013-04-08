@@ -124,7 +124,7 @@ static int output_configure(AACContext *ac,
 #define AAC_CATCH_DATA 1//taoanran add for catch the AAC data (1:  catch the data,     0: not catch the data)!!!
 
 #if AAC_CATCH_DATA 
-#define CATCH_FILE "./catch.aax" 
+#define CATCH_FILE "./catch.aac" 
 static FILE *m_fp_catch = NULL;
 #endif
 //---------------------------------------
