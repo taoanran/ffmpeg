@@ -86,6 +86,14 @@ static const enum AVPixelFormat h264_hwaccel_pixfmt_list_420[] = {
     AV_PIX_FMT_NONE
 };
 
+//catch the decoder's data(H264 data) ++++ taoanran add ++++++
+#define H264_CATCH_DATA 0//taoanran add for catch the H264 data (1:  catch the data,     0: not catch the data)!!!
+#if H264_CATCH_DATA
+#define CATCH_FILE "./catch.h264"
+static FILE *m_fp_catch = NULL;
+#endif
+//-------------------------------------------------------------
+
 static const enum AVPixelFormat h264_hwaccel_pixfmt_list_jpeg_420[] = {
 #if CONFIG_H264_DXVA2_HWACCEL
     AV_PIX_FMT_DXVA2_VLD,
@@ -1534,6 +1542,18 @@ av_cold int ff_h264_decode_init(AVCodecContext *avctx)
 
     ff_init_cabac_states();
     avctx->internal->allocate_progress = 1;
+
+#if H264_CATCH_DATA	
+	if (m_fp_catch == NULL)
+	{
+			m_fp_catch = fopen(CATCH_FILE, "ab+");
+			if (NULL == m_fp_catch) 
+			{
+					av_log(NULL, AV_LOG_ERROR, "[%s] ---------------------- fopen error !!! [%d][%s]\n", __func__, __LINE__, __FILE__);
+					return -1; 
+			}
+	}
+#endif
 
     return 0;
 }
@@ -4825,6 +4845,13 @@ static int decode_frame(AVCodecContext *avctx, void *data,
     Picture *out;
     int i, out_idx;
     int ret;
+	
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- IN [%d] [%s]\n", __func__, __LINE__, __FILE__);
+
+#if H264_CATCH_DATA
+if (m_fp_catch != NULL)
+	fwrite(buf, 1, buf_size, m_fp_catch);
+#endif
 
     h->flags  = avctx->flags;
 
@@ -4878,7 +4905,8 @@ static int decode_frame(AVCodecContext *avctx, void *data,
                 goto not_extra;
             p += nalsize;
         }
-
+		
+		av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);
         return ff_h264_decode_extradata(h, buf, buf_size);
     }
 not_extra:
@@ -4922,7 +4950,8 @@ not_extra:
     }
 
     assert(pict->data[0] || !*got_frame);
-
+	
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);
     return get_consumed_bytes(buf_index, buf_size);
 }
 
@@ -4947,6 +4976,13 @@ static av_cold int h264_decode_end(AVCodecContext *avctx)
     ff_h264_free_context(h);
 
     unref_picture(h, &h->cur_pic);
+#if H264_CATCH_DATA
+	if (m_fp_catch != NULL)
+	{
+			fclose(m_fp_catch);
+			m_fp_catch = NULL;
+	}
+#endif
 
     return 0;
 }
