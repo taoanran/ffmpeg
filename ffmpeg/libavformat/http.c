@@ -101,7 +101,7 @@ HTTP_CLASS(https);
 
 #if HTTP_CATCH_DATA
 #define HTTP_CATCH_FILE_TS "/home/taoanran/git/media/ffmpeg/http.ts"
-FILE *m_fp_catch = NULL;
+static FILE *m_fp_catch = NULL;
 #endif
 //----------------------------------------------------------
 
