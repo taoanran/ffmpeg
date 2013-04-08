@@ -121,7 +121,7 @@ static int output_configure(AACContext *ac,
 #define overread_err "Input buffer exhausted before END element found\n"
 
 //catch the decoder's data(pcm data)
-#define PCM_AAC_CATCH_DATA 1//taoanran add for catch the pcm data (1:  catch the data,     2: not catch the data)!!!
+#define PCM_AAC_CATCH_DATA 1//taoanran add for catch the pcm data (1:  catch the data,     0: not catch the data)!!!
 
 #if PCM_AAC_CATCH_DATA 
 #define CATCH_FILE "./catch.pcm" 
