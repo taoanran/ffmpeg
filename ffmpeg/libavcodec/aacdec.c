@@ -125,7 +125,7 @@ static int output_configure(AACContext *ac,
 
 #if PCM_AAC_CATCH_DATA 
 #define CATCH_FILE "./catch.pcm" 
-FILE *m_fp_catch = NULL;
+static FILE *m_fp_catch = NULL;
 #endif
 //---------------------------------------
 
