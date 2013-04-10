@@ -89,8 +89,15 @@ static const enum AVPixelFormat h264_hwaccel_pixfmt_list_420[] = {
 //catch the decoder's data(H264 data) ++++ taoanran add ++++++
 #define H264_CATCH_DATA 0//taoanran add for catch the H264 data (1:  catch the data,     0: not catch the data)!!!
 #if H264_CATCH_DATA
-#define CATCH_FILE "./catch.h264"
-static FILE *m_fp_catch = NULL;
+#define CATCH_H264_FILE "./catch.h264"
+static FILE *m_fp_h264_catch = NULL;
+#endif
+//-------------------------------------------------------------
+
+//catch the decoder's data(YUV data) ++++ taoanran add ++++++
+#define CATCH_YUV_DATA 1
+#if CATCH_YUV_DATA
+#define CATCH_YUV_FILE "./catch.yuv"
 #endif
 //-------------------------------------------------------------
 
@@ -110,6 +117,31 @@ static const enum AVPixelFormat h264_hwaccel_pixfmt_list_jpeg_420[] = {
     AV_PIX_FMT_YUVJ420P,
     AV_PIX_FMT_NONE
 };
+
+//taoanran add  for catch the YUV420P data +++++++++++++++++++++++++++++++++++++++++
+#if CATCH_YUV_DATA
+static void saveYUV420P(unsigned char *buf, int wrap, int xsize ,int ysize)
+{
+	FILE *f = NULL;
+	int i;
+	
+	if (buf == NULL)
+	{
+		av_log(NULL, AV_LOG_INFO, "buf == NULL\n");
+		return;
+	}
+
+	f=fopen(CATCH_YUV_FILE, "ab+");   
+	for(i=0;i<ysize;i++)
+	{
+		fwrite(buf + i * wrap, 1, xsize, f); 
+	}
+	fflush(f);
+	fclose(f);
+	f = NULL;
+}
+#endif	
+//----------------------------------------------------
 
 int avpriv_h264_has_num_reorder_frames(AVCodecContext *avctx)
 {
@@ -1544,10 +1576,10 @@ av_cold int ff_h264_decode_init(AVCodecContext *avctx)
     avctx->internal->allocate_progress = 1;
 
 #if H264_CATCH_DATA	
-	if (m_fp_catch == NULL)
+	if (m_fp_h264_catch == NULL)
 	{
-			m_fp_catch = fopen(CATCH_FILE, "ab+");
-			if (NULL == m_fp_catch) 
+			m_fp_catch = fopen(CATCH_H264_FILE, "ab+");
+			if (NULL == m_fp_h264_catch) 
 			{
 					av_log(NULL, AV_LOG_ERROR, "[%s] ---------------------- fopen error !!! [%d][%s]\n", __func__, __LINE__, __FILE__);
 					return -1; 
@@ -4849,8 +4881,8 @@ static int decode_frame(AVCodecContext *avctx, void *data,
 	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- IN [%d] [%s]\n", __func__, __LINE__, __FILE__);
 
 #if H264_CATCH_DATA
-if (m_fp_catch != NULL)
-	fwrite(buf, 1, buf_size, m_fp_catch);
+if (m_fp_h264_catch != NULL)
+	fwrite(buf, 1, buf_size, m_fp_h264_catch);
 #endif
 
     h->flags  = avctx->flags;
@@ -4950,7 +4982,17 @@ not_extra:
     }
 
     assert(pict->data[0] || !*got_frame);
-	
+
+#if CATCH_YUV_DATA
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- formate = %d [%d] [%s]\n", __func__, h->avctx->codec->pix_fmts, __LINE__, __FILE__);
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- h->DPB->f.linesize[0] = %d [%d] [%s]\n", __func__, h->DPB->f.linesize[0], __LINE__, __FILE__);
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- h->DPB->f.linesize[1] = %d [%d] [%s]\n", __func__, h->DPB->f.linesize[1], __LINE__, __FILE__);
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- h->DPB->f.linesize[2] = %d [%d] [%s]\n", __func__, h->DPB->f.linesize[2], __LINE__, __FILE__);
+	//catch the YUV420P data
+	saveYUV420P(h->DPB->f.data[0], h->DPB->f.linesize[0], avctx->width, avctx->height);      //Y: 4
+	saveYUV420P(h->DPB->f.data[1], h->DPB->f.linesize[1], avctx->width/2, avctx->height/2);    //U : 1
+	saveYUV420P(h->DPB->f.data[2], h->DPB->f.linesize[2], avctx->width/2, avctx->height/2);    //V : 1
+#endif	
 	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);
     return get_consumed_bytes(buf_index, buf_size);
 }
@@ -4977,10 +5019,10 @@ static av_cold int h264_decode_end(AVCodecContext *avctx)
 
     unref_picture(h, &h->cur_pic);
 #if H264_CATCH_DATA
-	if (m_fp_catch != NULL)
+	if (m_fp_h264_catch != NULL)
 	{
-			fclose(m_fp_catch);
-			m_fp_catch = NULL;
+		fclose(m_fp_h264_catch);
+		m_fp_h264_catch = NULL;
 	}
 #endif
 
