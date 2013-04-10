@@ -121,6 +121,16 @@ SDL_AudioDevice *current_audio = NULL;
 int SDL_AudioInit(const char *driver_name);
 void SDL_AudioQuit(void);
 
+
+//catch the decoder's data(PCM data) ++++++++++++++++++++++
+#define PCM_CATCH_DATA 1//taoanran add for catch the PCM data (1:  catch the data,     0: not catch the data)!!!
+
+#if PCM_CATCH_DATA
+#define CATCH_PCM_FILE "./catch.pcm"
+static FILE *m_pcm_fp_catch = NULL;
+#endif
+//----------------------------------------------
+
 /* The general mixing thread function */
 int SDLCALL SDL_RunAudio(void *audiop)
 {
@@ -196,6 +206,12 @@ int SDLCALL SDL_RunAudio(void *audiop)
 		if ( ! audio->paused ) {
 			SDL_mutexP(audio->mixer_lock);
 			(*fill)(udata, stream, stream_len);
+#if PCM_CATCH_DATA
+			if (m_pcm_fp_catch != NULL)
+			{
+				fwrite(stream, 1, stream_len, m_pcm_fp_catch);
+			}
+#endif
 			SDL_mutexV(audio->mixer_lock);
 		}
 
@@ -233,6 +249,14 @@ int SDLCALL SDL_RunAudio(void *audiop)
         printf("[SDL_RunAudio] : Task exiting. (TID%d)\n", SDL_ThreadID());
 #endif
 #endif
+
+	#if PCM_CATCH_DATA 
+		if (m_pcm_fp_catch != NULL)
+		{
+			fclose(m_pcm_fp_catch);
+ 			m_pcm_fp_catch = NULL; 
+		}
+	#endif
 	return(0);
 }
 
@@ -382,6 +406,10 @@ int SDL_AudioInit(const char *driver_name)
 			current_audio->UnlockAudio = SDL_UnlockAudio_Default;
 		}
 	}
+
+	printf("[%s] -------------------------- SDL_AudioInit driver's name = %s [%d][%s]\n",
+		__func__, current_audio->name, __LINE__, __FILE__);
+
 	return(0);
 }
 
@@ -396,6 +424,15 @@ char *SDL_AudioDriverName(char *namebuf, int maxlen)
 
 int SDL_OpenAudio(SDL_AudioSpec *desired, SDL_AudioSpec *obtained)
 {
+#if PCM_CATCH_DATA 
+	m_pcm_fp_catch = fopen(CATCH_PCM_FILE, "ab+");
+	if (NULL == m_pcm_fp_catch)
+	{
+		printf("[%s] ---------------------- fopen error !!! [%d][%s]\n", __func__, __LINE__, __FILE__);
+		return -1;
+	}
+#endif
+
 	SDL_AudioDevice *audio;
 	const char *env;
 
@@ -449,7 +486,8 @@ int SDL_OpenAudio(SDL_AudioSpec *desired, SDL_AudioSpec *obtained)
 	    case 2:	/* Stereo */
 	    case 4:	/* surround */
 	    case 6:	/* surround with center and lfe */
-		break;
+			printf("[%s] ---------------- audioChannel = %d [%d][%s]\n", __func__, desired->channels, __LINE__, __FILE__);
+			break;
 	    default:
 		SDL_SetError("1 (mono) and 2 (stereo) channels supported");
 		return(-1);
@@ -616,6 +654,13 @@ void SDL_UnlockAudio (void)
 
 void SDL_CloseAudio (void)
 {
+	#if PCM_CATCH_DATA 
+		if (m_pcm_fp_catch != NULL)
+		{
+			fclose(m_pcm_fp_catch);
+ 			m_pcm_fp_catch = NULL; 
+		}
+	#endif
 	SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
