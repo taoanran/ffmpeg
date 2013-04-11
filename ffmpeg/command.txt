@@ -1,1 +1,8 @@
-ffmpeg -i audio.wav -f s16le   -acodec pcm_s16le out.pcm
+wav to pcm :
+	ffmpeg -i audio.wav -f s16le   -acodec pcm_s16le out.pcm
+
+record a movie : 
+	ffmpeg -i rtsp://192.168.230.206/h264 -t 60 -vcodec copy -acodec copy flv.flv 
+
+multicast play: 
+	ffplay udp://224.1.1.1:4444 
