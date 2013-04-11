@@ -189,17 +189,25 @@ static int url_alloc_for_protocol (URLContext **puc, struct URLProtocol *up,
 
 int ffurl_connect(URLContext* uc, AVDictionary **options)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ---------taoanran------------ IN [%d][%s]\n", __func__, __LINE__, __FILE__);
     int err =
         uc->prot->url_open2 ? uc->prot->url_open2(uc, uc->filename, uc->flags, options) :
         uc->prot->url_open(uc, uc->filename, uc->flags);
-    if (err)
-        return err;
+   if (err)
+   {
+           av_log(NULL, AV_LOG_INFO, "[%s] ---------taoanran------------ OUT(error) [%d][%s]\n", __func__, __LINE__, __FILE__);    
+           
+           return err;
+   } 
     uc->is_connected = 1;
     //We must be careful here as ffurl_seek() could be slow, for example for http
     if(   (uc->flags & AVIO_FLAG_WRITE)
        || !strcmp(uc->prot->name, "file"))
         if(!uc->is_streamed && ffurl_seek(uc, 0, SEEK_SET) < 0)
             uc->is_streamed= 1;
+
+	av_log(NULL, AV_LOG_INFO, "[%s] ---------taoanran------------ OUT [%d][%s]\n", __func__, __LINE__, __FILE__);   
+
     return 0;
 }
 
@@ -232,6 +240,25 @@ int ffurl_alloc(URLContext **puc, const char *filename, int flags,
     av_strlcpy(proto_nested, proto_str, sizeof(proto_nested));
     if ((ptr = strchr(proto_nested, '+')))
         *ptr = '\0';
+	
+	av_log(NULL, AV_LOG_INFO, "----proto_str = %s\n", proto_str);
+	
+	//taoanran add for igmp +++++++++++++++++++++++++++++++++++
+	if (!strncmp(proto_str, "IGMP", 4) || !strncmp(proto_str ,"igmp", 4))
+	{
+		memset(proto_str, 0, 128);
+		strncpy(proto_str, "udp", strlen("udp"));		
+	
+		char filename_igmp[1024];
+		memset(filename_igmp, 0, 1024);
+		strncpy(filename_igmp, "udp", 3);
+		av_log(NULL, AV_LOG_INFO, strchr(filename, ':'));
+		strncat(filename_igmp, strchr(filename, ':'), strlen(strchr(filename, ':')));
+
+		memset(filename, 0, strlen(filename)+1);
+		strncpy(filename ,filename_igmp, strlen(filename_igmp));
+	}
+	// ----------------------------------------------------------
 
     while (up = ffurl_protocol_next(up)) {
         if (!strcmp(proto_str, up->name))
