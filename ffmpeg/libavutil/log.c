@@ -215,7 +215,7 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
         return;
     format_line(ptr, level, fmt, vl, part, sizeof(part[0]), &print_prefix, type);
     snprintf(line, sizeof(line), "%s%s%s", part[0], part[1], part[2]);
-
+	
 #if HAVE_ISATTY
     if (!is_atty)
         is_atty = isatty(2) ? 1 : -1;
@@ -238,6 +238,19 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
     colored_fputs(type[1], part[1]);
     sanitize(part[2]);
     colored_fputs(av_clip(level >> 3, 0, 6), part[2]);
+
+	//taoanran add for save log to a file
+	FILE *fp = fopen("./log_ffmpeg.txt", "a+");
+	
+	if (fp != NULL)
+	{	
+		fwrite(part[0], 1, strlen(part[0]), fp);
+		fwrite(part[1], 1, strlen(part[1]), fp);
+		fwrite(part[2], 1, strlen(part[2]), fp);
+		fclose(fp);
+		fp = NULL;
+	}
+	//-----------------------------------
 }
 
 static void (*av_log_callback)(void*, int, const char*, va_list) =
