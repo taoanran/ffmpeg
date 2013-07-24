@@ -54,6 +54,9 @@
 # include <iconv.h>
 #endif
 
+#define CATCH_YUV_DECODER
+
+
 volatile int ff_avcodec_locked;
 static int volatile entangled_thread_counter = 0;
 static int (*ff_lockmgr_cb)(void **mutex, enum AVLockOp op);
@@ -508,6 +511,33 @@ fail:
     return AVERROR(ENOMEM);
 }
 
+//taoanran add  for catch the YUV420P data +++++++++++++++++++++++++++++++++++++++++
+#if CATCH_YUV_DECODER
+static void saveYUV420P(unsigned char *buf, int wrap, int xsize ,int ysize)
+{
+    FILE *f = NULL;
+    int i;
+
+    if (buf == NULL)
+    {
+        av_log(NULL, AV_LOG_INFO, "buf == NULL\n");
+        return ;
+    }
+
+	#define CATCH_YUV_FILE "./decode_YUV420.yuv"
+
+    f=fopen(CATCH_YUV_FILE, "ab+");
+    for(i=0;i<ysize;i++)
+    {
+        fwrite(buf + i * wrap, 1, xsize, f); 
+    }
+    fflush(f);
+    fclose(f);
+
+    f = NULL;
+}
+#endif
+
 static int video_get_buffer(AVCodecContext *s, AVFrame *pic)
 {
     FramePool *pool = s->internal->pool;
@@ -544,7 +574,16 @@ static int video_get_buffer(AVCodecContext *s, AVFrame *pic)
                 FFALIGN((pic->linesize[i] * EDGE_WIDTH >> v_shift) +
                         (pixel_size * EDGE_WIDTH >> h_shift), pool->stride_align[i]);
         }
+
     }
+
+		//taoanran add for save the data push into the decoder
+#ifdef CATCH_YUV_DECODER
+	    //catch the YUV420P data
+	    saveYUV420P(pic->data[0], pic->linesize[0], s->width, s->height);      //Y: 4
+	    saveYUV420P(pic->data[1], pic->linesize[1], s->width/2, s->height/2);    //U : 1
+	    saveYUV420P(pic->data[2], pic->linesize[2], s->width/2, s->height/2);    //V : 1
+#endif 	
     for (; i < AV_NUM_DATA_POINTERS; i++) {
         pic->data[i] = NULL;
         pic->linesize[i] = 0;
@@ -1025,6 +1064,7 @@ int attribute_align_arg ff_codec_open2_recursive(AVCodecContext *avctx, const AV
 
 int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *codec, AVDictionary **options)
 {
+    av_log(NULL, AV_LOG_INFO, "[%s] --------------------------- IN [%d] [%s]\n", __func__, __LINE__, __FILE__);
     int ret = 0;
     AVDictionary *tmp = NULL;
 
@@ -1348,6 +1388,9 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code
             }
         }
     }
+
+	av_log(NULL, AV_LOG_INFO, "[%s] --------- avctx->code->name = %s[%d][%s]\n", __func__, avctx->codec->name, __LINE__, __FILE__);
+
 end:
     ff_unlock_avcodec();
     if (options) {
@@ -1355,6 +1398,7 @@ end:
         *options = tmp;
     }
 
+    av_log(NULL, AV_LOG_INFO, "[%s] --------------------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);
     return ret;
 free_and_end:
     av_dict_free(&tmp);
@@ -1711,12 +1755,15 @@ int attribute_align_arg avcodec_encode_video2(AVCodecContext *avctx,
     AVPacket user_pkt = *avpkt;
     int needs_realloc = !user_pkt.data;
 
+        av_log(NULL, AV_LOG_INFO, "[%s]  -------------------------- [%d][%s]\n", __func__, __LINE__, __FILE__);
     *got_packet_ptr = 0;
 
     if(CONFIG_FRAME_THREAD_ENCODER &&
        avctx->internal->frame_thread_encoder && (avctx->active_thread_type&FF_THREAD_FRAME))
+    {
+        av_log(NULL, AV_LOG_INFO, "[%s] avcodec_encode_video2 ----------- ff_thread_video_encode_frame![%d][%s]\n", __func__, __LINE__, __FILE__);
         return ff_thread_video_encode_frame(avctx, avpkt, frame, got_packet_ptr);
-
+    }
     if ((avctx->flags&CODEC_FLAG_PASS1) && avctx->stats_out)
         avctx->stats_out[0] = '\0';
 
@@ -1892,6 +1939,7 @@ int attribute_align_arg avcodec_decode_video2(AVCodecContext *avctx, AVFrame *pi
                                               int *got_picture_ptr,
                                               const AVPacket *avpkt)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] -------------------------- IN [%d][%s]\n", __func__, __LINE__, __FILE__);
     AVCodecInternal *avci = avctx->internal;
     int ret;
     // copy to ensure we do not change avpkt
@@ -1921,6 +1969,7 @@ int attribute_align_arg avcodec_decode_video2(AVCodecContext *avctx, AVFrame *pi
         else {
             ret = avctx->codec->decode(avctx, picture, got_picture_ptr,
                                        &tmp);
+			av_log(NULL, AV_LOG_INFO, "[%s] --------------  avctx->codec->decode --------- [%d] [%s]\n", __func__, __LINE__, __FILE__);
             picture->pkt_dts = avpkt->dts;
 
             if(!avctx->has_b_frames){
@@ -1967,7 +2016,7 @@ int attribute_align_arg avcodec_decode_video2(AVCodecContext *avctx, AVFrame *pi
     /* many decoders assign whole AVFrames, thus overwriting extended_data;
      * make sure it's set correctly */
     picture->extended_data = picture->data;
-
+	av_log(NULL, AV_LOG_INFO, "[%s] -------------------------- OUT [%d][%s]\n", __func__, __LINE__, __FILE__);
     return ret;
 }
 
