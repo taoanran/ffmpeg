@@ -169,7 +169,7 @@ static int http_open_cnx(URLContext *h)
 
     ff_url_join(buf, sizeof(buf), lower_proto, NULL, hostname, port, NULL);
 
-    if (!s->hd) {
+    if (!s->hd) { //this point the TCP ----- taoanran
         AVDictionary *opts = NULL;
         char opts_format[20];
         if (s->rw_timeout != -1) {
@@ -236,6 +236,8 @@ int ff_http_do_new_request(URLContext *h, const char *uri)
 
 static int http_open(URLContext *h, const char *uri, int flags)
 {
+        
+        av_log(NULL, AV_LOG_INFO, "[%s] ---------------------- IN [%d][%s]\n", __func__, __LINE__, __FILE__);
 #if HTTP_CATCH_DATA
 
    	m_fp_catch = fopen(HTTP_CATCH_FILE_TS, "ab+");
@@ -259,9 +261,14 @@ static int http_open(URLContext *h, const char *uri, int flags)
         int len = strlen(s->headers);
         if (len < 2 || strcmp("\r\n", s->headers + len - 2))
             av_log(h, AV_LOG_WARNING, "No trailing CRLF found in HTTP header.\n");
+	
+        av_log(NULL, AV_LOG_INFO, "[%s] ---------------------- header = %s [%d][%s]\n", __func__, s->headers, __LINE__, __FILE__);
     }
 
-    return http_open_cnx(h);
+    int ret = http_open_cnx(h);
+    av_log(NULL, AV_LOG_INFO, "[%s] ---------------------- OUT [%d][%s]\n", __func__, __LINE__, __FILE__);
+
+    return ret;
 }
 static int http_getc(HTTPContext *s)
 {
@@ -621,6 +628,14 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
     av_freep(&proxyauthstr);
     if ((err = ffurl_write(s->hd, s->buffer, strlen(s->buffer))) < 0)
         return err;
+    
+    av_log(NULL, AV_LOG_INFO, "[%s] ------------ 11111111 --------- [%d][%s]\n", __func__, __LINE__, __FILE__);
+    //show the HTML, GET ---- taoanran
+    if (s->buffer != NULL)
+    {
+        av_log(NULL, AV_LOG_INFO, "[%s][%d][%s]-------------------- \n", __func__, __LINE__, __FILE__);
+        av_log(NULL, AV_LOG_INFO, "%s\n", s->buffer);
+    }
 
     if (s->post_data)
         if ((err = ffurl_write(s->hd, s->post_data, s->post_datalen)) < 0)
@@ -641,6 +656,15 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
          * function will check http_code after we return. */
         s->http_code = 200;
         return 0;
+    }
+    
+    //show the HTML(POST) ---- taoanran 
+    if (s->post_datalen)
+    {
+        av_log(NULL, AV_LOG_INFO, "[%s][%s] ------------ header = \n", __func__, __FILE__);
+        for(int i=0; i<s->post_datalen; i++)
+            av_log(NULL, AV_LOG_INFO, "%c", s->post_data[i]);
+        av_log(NULL, AV_LOG_INFO, "/n");
     }
 
     /* wait for header */

@@ -1,0 +1,278 @@
+/*
+ * A demo of ffmpeg(play)
+ *
+ * */
+
+#include "config.h"
+#include <inttypes.h>
+#include <math.h>
+#include <limits.h>
+#include <signal.h>
+#include "libavutil/avstring.h"
+#include "libavutil/colorspace.h"
+#include "libavutil/mathematics.h"
+#include "libavutil/pixdesc.h"
+#include "libavutil/imgutils.h"
+#include "libavutil/dict.h"
+#include "libavutil/parseutils.h"
+#include "libavutil/samplefmt.h"
+#include "libavutil/avassert.h"
+#include "libavutil/time.h"
+#include "libavformat/avformat.h"
+#include "libavdevice/avdevice.h"
+#include "libswscale/swscale.h"
+#include "libavutil/opt.h"
+#include "libavcodec/avfft.h"
+#include "libswresample/swresample.h"
+
+#if CONFIG_AVFILTER
+# include "libavfilter/avcodec.h"
+# include "libavfilter/avfilter.h"
+# include "libavfilter/avfiltergraph.h"
+# include "libavfilter/buffersink.h"
+# include "libavfilter/buffersrc.h"
+#endif
+
+#include <SDL.h>
+#include <SDL_thread.h>
+#include "cmdutils.h"
+#include <assert.h>
+
+#include "demo.h"
+
+static int fs_screen_width;
+static int fs_screen_height;
+
+static AVPacket flush_pkt;
+static AVInputFormat *file_iformat;
+
+typedef struct PacketQueue {   
+    AVPacketList *first_pkt, *last_pkt;   
+    int n_packets;   
+    int size;   
+    int abort_request;   
+    SDL_mutex *mutex;   
+    SDL_cond *cond;   
+} PacketQueue_t;   
+
+typedef struct ResourcesSet {   
+    char *filename;   
+    AVFormatContext *ic;   
+    AVCodecContext *videoDec, *audioDec;   
+    AVCodec *videoCodec, *audioCodec;   
+    AVFrame *frame;   
+    int videoStream, audioStream;   
+    struct SwsContext *imgConvert;   
+    //AVInputFormat *iformat;
+
+    PacketQueue_t audioQ;   
+
+    SDL_Surface *screen;   
+    SDL_Overlay *bmp;   
+} ResourcesSet_t;   
+
+static ResourcesSet_t g_RSet;   
+
+static VideoState *Tstream_open(const char *filename/*, AVInputFormat *iformat*/)
+{
+    int err = 0;
+    int i;
+    AVDictionary **opts;
+
+    g_RSet.filename = filename; 
+    //g_RSet.iformat = iformat;
+
+    err = avformat_open_input(&g_RSet.ic, g_RSet.filename, NULL /*g_RSet.iformat*/, NULL);
+    if (err != 0)
+    {
+        av_log(NULL, AV_LOG_ERROR, "[%s] -------- avformat_open_input error ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        return NULL;
+    }
+
+    opts = setup_find_stream_info_opts(&g_RSet.ic, codec_opts); 
+    
+    err = avformat_find_stream_info(&g_RSet.ic, opts);
+    if (err != 0)
+    {
+        av_log(NULL, AV_LOG_ERROR, "[%s] -------- avformat_find_stream_info ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        return NULL;
+    }
+
+    // Find the first video stream   
+    g_RSet.videoStream = -1;   
+    for(i = 0; i < g_RSet.ic->nb_streams; i++) 
+    {   
+        if(g_RSet.ic->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO)
+        {   
+            g_RSet.videoStream = i;   
+            break;   
+        }   
+    } 
+
+    av_log(NULL, AV_LOG_INFO, "[%s] -------- g_RSet.videoStream = %d ------ [%d][%s]\n", __func__, g_RSet.videoStream, __LINE__, __FILE__);
+
+    if (g_RSet.videoStream < 0)
+    {
+        av_log(NULL, AV_LOG_INFO, "[%s] -------- g_RSet.videoStream < 0, there isn't vedio !!!! ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+    }
+    else
+    {
+        // Get a pointer to the codec context for the video stream
+        g_RSet.videoDec = g_RSet.ic->streams[g_RSet.videoStream]->codec;   
+
+        av_log(NULL, AV_LOG_INFO, "[%s] --------  !!!! ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        // Find the decoder for the video stream   
+        av_log(NULL, AV_LOG_INFO, "[%s] -------- Found  video codec_id = %d ------ [%d][%s]\n", __func__, g_RSet.videoDec->codec_id, __LINE__, __FILE__);
+        if (g_RSet.videoDec->codec_id == AV_CODEC_ID_H264)
+        {
+            av_log(NULL, AV_LOG_INFO, "[%s] -------- Found  video codec_id = AV_CODEC_ID_H264 ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        }
+
+        g_RSet.videoCodec = avcodec_find_decoder(g_RSet.videoDec->codec_id);
+        if(g_RSet.videoCodec == NULL)
+        {   
+            av_log(NULL, AV_LOG_ERROR, "[%s] -------- Found no video codec !!!! ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+            return NULL;   
+        }   
+    }
+    
+            av_log(NULL, AV_LOG_INFO, "[%s] -------- 222222222222 ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+    //open the video codec
+#if 1
+    err = avcodec_open2(g_RSet.videoDec, g_RSet.videoCodec, opts);
+    if (err < 0)
+    {
+        av_log(NULL, AV_LOG_ERROR, "[%s] -------- avcodec_open error !!!! ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        return NULL;
+    }
+#endif
+
+    // Find the first audio stream   
+    g_RSet.audioStream = -1;   
+    for(i=0; i<g_RSet.ic->nb_streams; i++) {   
+        if(g_RSet.ic->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO) {   
+            g_RSet.audioStream = i;   
+            break;   
+        }   
+    }  
+
+    av_log(NULL, AV_LOG_INFO, "[%s] -------- g_RSet.audioStream = %d ------ [%d][%s]\n", __func__, g_RSet.audioStream, __LINE__, __FILE__);
+
+    if (g_RSet.audioStream < 0)
+    {
+        av_log(NULL, AV_LOG_INFO, "[%s] -------- g_RSet.audioStream < 0, there isn't audio !!!! ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+    }
+    else
+    {
+        // Get a pointer to the codec context for the audio stream
+        g_RSet.audioDec = g_RSet.ic->streams[g_RSet.audioStream]->codec; 
+
+        // Find the decoder for the audio stream   
+        av_log(NULL, AV_LOG_INFO, "[%s] -------- Found  audio codec_id = 0x%x ------ [%d][%s]\n", __func__, g_RSet.audioDec->codec_id, __LINE__, __FILE__);
+        if (g_RSet.audioDec->codec_id == AV_CODEC_ID_MP3)
+        {
+            av_log(NULL, AV_LOG_INFO, "[%s] -------- Found  audio codec_id = AV_CODEC_ID_MP3 ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        }
+
+        g_RSet.audioCodec = avcodec_find_decoder(g_RSet.audioDec->codec_id);
+        if(g_RSet.audioCodec == NULL)
+        {   
+            av_log(NULL, AV_LOG_ERROR, "[%s] -------- Found no audio codec !!!! ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+            return NULL;   
+        }   
+    }
+
+
+
+
+    av_log(NULL, AV_LOG_INFO, "[%s] -------- 333333333 ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+    //no video nor audio stream, return error   
+    if (g_RSet.audioStream == -1 && g_RSet.videoStream == -1)
+    {   
+        av_log(NULL, AV_LOG_ERROR, "[%s] -------- NO audioStream and videoStream ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        return NULL;
+    }   
+
+    // Allocate video frame   
+    g_RSet.frame = avcodec_alloc_frame();   
+    if (!g_RSet.frame) 
+    {   
+        av_log(NULL, AV_LOG_ERROR, "[%s] -------- Cannt alloc frame buffer ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        return NULL;
+    }   
+
+    av_log(NULL, AV_LOG_INFO, "[%s] -------- 4444444 ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+
+    g_RSet.imgConvert = sws_getContext(g_RSet.videoDec->width, g_RSet.videoDec->height,    
+            g_RSet.videoDec->pix_fmt, g_RSet.videoDec->width, g_RSet.videoDec->height,    
+            PIX_FMT_YUVJ420P,  SWS_FAST_BILINEAR, NULL, NULL, NULL);   
+    if (!g_RSet.imgConvert) {   
+        av_log(NULL, AV_LOG_ERROR, "[%s] -------- Cannt alloc imgConvert buffer ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+        return NULL;
+    }   
+            av_log(NULL, AV_LOG_INFO, "[%s] -------- 5555555 ------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+}
+
+int main(int argc, char **argv)
+{
+    char filename[128];
+    int flags = 0;
+
+    fs_screen_width = fs_screen_height = 0;
+    file_iformat = NULL;
+    memset(&g_RSet, 0x0, sizeof(g_RSet));   
+
+    memset(filename, 0, 128);
+
+    av_log_set_flags(AV_LOG_SKIP_REPEATED);//skip the repeated message !!!
+
+    /* register all codecs, demux and protocols */  
+    avcodec_register_all();
+#if CONFIG_AVDEVICE 
+    avdevice_register_all();
+#endif
+
+#if CONFIG_AVFILTER   
+    avfilter_register_all();
+#endif
+    av_register_all();  
+
+    avformat_network_init();
+
+    init_opts();
+
+    //parse_options(NULL, argc, argv, options, opt_input_file);
+    if (argc > 1)
+        strncpy(filename, argv[1], strlen(argv[1]));
+
+    flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
+
+    if (SDL_Init (flags))
+    {
+        fprintf(stderr, "Could not initialize SDL - %s\n", SDL_GetError());
+        return -1;
+    }
+
+    //init the screen 
+    const SDL_VideoInfo *vi = SDL_GetVideoInfo();
+    fs_screen_width = vi->current_w;
+    fs_screen_height = vi->current_h;
+
+    memset(&flush_pkt, 0, sizeof(&flush_pkt));
+    av_init_packet(&flush_pkt);
+    flush_pkt.data = (char *)(intptr_t)"FLUSH";
+
+    av_log(NULL, AV_LOG_INFO, "file = %s\n", filename);
+    av_log(NULL, AV_LOG_INFO, "format = %s\n", "mp4");
+    //sniff the format of file
+#if 0
+    if ((file_iformat = av_find_input_format("mp4")) == NULL)
+    {
+        av_log(NULL, AV_LOG_INFO, "the format sniffed false !!!!!\n");
+        return -1;
+    }
+#endif    
+    Tstream_open(filename/*, file_iformat*/);    
+
+    return 0;
+}

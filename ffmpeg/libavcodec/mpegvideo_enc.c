@@ -66,6 +66,39 @@ static int dct_quantize_trellis_c(MpegEncContext *s, int16_t *block, int n, int 
 static uint8_t default_mv_penalty[MAX_FCODE + 1][MAX_MV * 2 + 1];
 static uint8_t default_fcode_tab[MAX_MV * 2 + 1];
 
+//catch the decoder's data(YUV data) ++++ taoanran add ++++++
+#define CATCH_YUV_DATA 1
+#if CATCH_YUV_DATA
+#define CATCH_YUV_FILE "./catch.yuv"
+#endif
+//-------------------------------------------------------------
+
+
+//taoanran add  for catch the YUV420P data +++++++++++++++++++++++++++++++++++++++++
+#if CATCH_YUV_DATA
+static void saveYUV420P(unsigned char *buf, int wrap, int xsize ,int ysize)
+{
+    FILE *f = NULL;
+    int i;
+
+    if (buf == NULL)
+    {
+        av_log(NULL, AV_LOG_INFO, "buf == NULL\n");
+        return ;
+    }
+
+    f=fopen(CATCH_YUV_FILE, "ab+");
+    for(i=0;i<ysize;i++)
+    {
+        fwrite(buf + i * wrap, 1, xsize, f); 
+    }
+    fflush(f);
+    fclose(f);
+
+    f = NULL;
+}
+#endif
+
 const AVOption ff_mpv_generic_options[] = {
     FF_MPV_COMMON_OPTS
     { NULL },
@@ -253,6 +286,7 @@ av_cold int ff_dct_encode_init(MpegEncContext *s) {
 /* init video encoder */
 av_cold int ff_MPV_encode_init(AVCodecContext *avctx)
 {
+    av_log(NULL, AV_LOG_INFO, "[%s] ---------------------------- [%d][%s]\n", __func__, __LINE__, __LINE__);
     MpegEncContext *s = avctx->priv_data;
     int i;
     int chroma_h_shift, chroma_v_shift;
@@ -1443,6 +1477,7 @@ no_output_pic:
 int ff_MPV_encode_picture(AVCodecContext *avctx, AVPacket *pkt,
                           AVFrame *pic_arg, int *got_packet)
 {
+    av_log(NULL, AV_LOG_INFO, "[%s] ---------------------------- [%d][%s]\n", __func__, __LINE__, __FILE__);
     MpegEncContext *s = avctx->priv_data;
     int i, stuffing_count, ret;
     int context_count = s->slice_context_count;
@@ -1451,6 +1486,13 @@ int ff_MPV_encode_picture(AVCodecContext *avctx, AVPacket *pkt,
 
     if (load_input_picture(s, pic_arg) < 0)
         return -1;
+
+#if CATCH_YUV_DATA
+    //catch the YUV420P data
+    saveYUV420P(pic_arg->data[0], pic_arg->linesize[0], avctx->width, avctx->height);      //Y: 4
+    saveYUV420P(pic_arg->data[1], pic_arg->linesize[1], avctx->width/2, avctx->height/2);    //U : 1
+    saveYUV420P(pic_arg->data[2], pic_arg->linesize[2], avctx->width/2, avctx->height/2);    //V : 1
+#endif
 
     if (select_input_picture(s) < 0) {
         return -1;

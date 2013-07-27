@@ -389,16 +389,17 @@ AVInputFormat *av_probe_input_format3(AVProbeData *pd, int is_opened, int *score
             fmt = NULL;
     }
     *score_ret= score_max;
-
+	av_log(NULL, AV_LOG_INFO, "fmt = %s\n", fmt->name);
     return fmt;
 }
 
 AVInputFormat *av_probe_input_format2(AVProbeData *pd, int is_opened, int *score_max)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ----------------------------- [%d][%s]\n", __func__, __LINE__, __FILE__);
     int score_ret;
     AVInputFormat *fmt= av_probe_input_format3(pd, is_opened, &score_ret);
     if(score_ret > *score_max){
-        *score_max= score_ret;
+        *score_max= score_ret;		
         return fmt;
     }else
         return NULL;
@@ -411,6 +412,7 @@ AVInputFormat *av_probe_input_format(AVProbeData *pd, int is_opened){
 
 static int set_codec_from_probe_data(AVFormatContext *s, AVStream *st, AVProbeData *pd)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ----------------------------- [%d][%s]\n", __func__, __LINE__, __FILE__);
     static const struct {
         const char *name; enum AVCodecID id; enum AVMediaType type;
     } fmt_id_type[] = {
@@ -470,6 +472,8 @@ int av_probe_input_buffer(AVIOContext *pb, AVInputFormat **fmt,
                           const char *filename, void *logctx,
                           unsigned int offset, unsigned int max_probe_size)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ---------------------- [%d][%s]\n", __func__, __LINE__, __FILE__);
+
     AVProbeData pd = { filename ? filename : "", NULL, -offset };
     unsigned char *buf = NULL;
     uint8_t *mime_type;
@@ -540,6 +544,11 @@ int av_probe_input_buffer(AVIOContext *pb, AVInputFormat **fmt,
         av_free(buf);
         return AVERROR_INVALIDDATA;
     }
+    else //taoanran add for show the formate
+    {
+            
+         av_log(NULL, AV_LOG_INFO, "[%s]--------- A/V Format is : %s ------- [%d] [%s]\n", __func__, (*fmt)->name, __LINE__, __FILE__);
+    }
 
     /* rewind. reuse probe buffer to avoid seeking */
     ret = ffio_rewind_with_probe_data(pb, &buf, pd.buf_size);
@@ -550,6 +559,8 @@ int av_probe_input_buffer(AVIOContext *pb, AVInputFormat **fmt,
 /* open input file and probe the format if necessary */
 static int init_input(AVFormatContext *s, const char *filename, AVDictionary **options)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s]--------------------------- [%d][%s]\n", __func__, __LINE__, __FILE__);
+
     int ret;
     AVProbeData pd = {filename, NULL, 0};
     int score = AVPROBE_SCORE_RETRY;
@@ -567,12 +578,16 @@ static int init_input(AVFormatContext *s, const char *filename, AVDictionary **o
     if ( (s->iformat && s->iformat->flags & AVFMT_NOFILE) ||
         (!s->iformat && (s->iformat = av_probe_input_format2(&pd, 0, &score))))
         return 0;
+	
+	av_log(s, AV_LOG_WARNING, "Custom AVIOContext makes no sense and "
+                         "will be ignored with AVFMT_NOFILE format.\n");
 
     if ((ret = avio_open2(&s->pb, filename, AVIO_FLAG_READ | s->avio_flags,
                           &s->interrupt_callback, options)) < 0)
         return ret;
     if (s->iformat)
         return 0;
+    //probe the format of the data ---- taoanran add 
     return av_probe_input_buffer(s->pb, &s->iformat, filename, s, 0, s->probesize);
 }
 
@@ -611,6 +626,7 @@ int avformat_queue_attached_pictures(AVFormatContext *s)
 
 int avformat_open_input(AVFormatContext **ps, const char *filename, AVInputFormat *fmt, AVDictionary **options)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s]---------------------------IN [%d][%s]\n", __func__, __LINE__, __FILE__);
     AVFormatContext *s = *ps;
     int ret = 0;
     AVDictionary *tmp = NULL;
@@ -690,6 +706,8 @@ int avformat_open_input(AVFormatContext **ps, const char *filename, AVInputForma
         *options = tmp;
     }
     *ps = s;
+
+	av_log(NULL, AV_LOG_INFO, "[%s]--------------------------- OUT [%d][%s]\n", __func__, __LINE__, __FILE__);
     return 0;
 
 fail:
@@ -721,6 +739,7 @@ static void force_codec_ids(AVFormatContext *s, AVStream *st)
 
 static void probe_codec(AVFormatContext *s, AVStream *st, const AVPacket *pkt)
 {
+av_log(NULL, AV_LOG_INFO, "[%s] ----------------------------- [%d][%s]\n", __func__, __LINE__, __FILE__);
     if(st->request_probe>0){
         AVProbeData *pd = &st->probe_data;
         int end;
@@ -769,7 +788,9 @@ int ff_read_packet(AVFormatContext *s, AVPacket *pkt)
     int ret, i;
     AVStream *st;
 
-    for(;;){
+	av_log(s, AV_LOG_INFO, "[%s] ------------------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+
+	for(;;){
         AVPacketList *pktl = s->raw_packet_buffer;
 
         if (pktl) {
@@ -788,6 +809,7 @@ int ff_read_packet(AVFormatContext *s, AVPacket *pkt)
         pkt->data = NULL;
         pkt->size = 0;
         av_init_packet(pkt);
+		av_log(NULL, AV_LOG_INFO, "read_packet(formatName) = %s\n",  s->iformat->name);
         ret= s->iformat->read_packet(s, pkt);
         if (ret < 0) {
             if (!pktl || ret == AVERROR(EAGAIN))
@@ -1447,6 +1469,17 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
              * really terminate parsing */
             break;
         }
+
+		//catch the data +++++++++++++++
+		FILE *fp = NULL;
+		fp = fopen("./rtsp.ts", "ab+");
+		if (fp != NULL)
+		{
+			fwrite(cur_pkt.data, 1, cur_pkt.size, fp);
+			fclose(fp);
+			fp = NULL;
+		}
+		// -------------------------
         ret = 0;
         st  = s->streams[cur_pkt.stream_index];
 
@@ -2756,6 +2789,8 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
     if(ic->pb)
         av_log(ic, AV_LOG_DEBUG, "File position before avformat_find_stream_info() is %"PRId64"\n", avio_tell(ic->pb));
 
+	av_log(NULL, AV_LOG_INFO, "[%s] --------------------- ic->nb_streams = %d [%d][%s]\n", __func__, ic->nb_streams, __LINE__, __FILE__);
+
     for(i=0;i<ic->nb_streams;i++) {
         const AVCodec *codec;
         AVDictionary *thread_opt = NULL;
@@ -2785,6 +2820,8 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
         }
         codec = st->codec->codec ? st->codec->codec :
                                    avcodec_find_decoder(st->codec->codec_id);
+		av_log(NULL, AV_LOG_INFO, "the AVcodec = %s\n", codec->name);	
+
 
         /* force thread count to 1 since the h264 decoder will not extract SPS
          *  and PPS to extradata during multi-threaded decoding */
@@ -4179,6 +4216,7 @@ int64_t ff_iso8601_to_unix_time(const char *datestr)
 
 int avformat_query_codec(AVOutputFormat *ofmt, enum AVCodecID codec_id, int std_compliance)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ----------------- IN [%d][%s]\n", __func__, __LINE__, __FILE__);
     if (ofmt) {
         if (ofmt->query_codec)
             return ofmt->query_codec(codec_id, std_compliance);
@@ -4188,6 +4226,7 @@ int avformat_query_codec(AVOutputFormat *ofmt, enum AVCodecID codec_id, int std_
                  codec_id == ofmt->subtitle_codec)
             return 1;
     }
+	av_log(NULL, AV_LOG_INFO, "[%s] ----------------- OUT [%d][%s]\n", __func__, __LINE__, __FILE__);
     return AVERROR_PATCHWELCOME;
 }
 

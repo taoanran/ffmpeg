@@ -28,7 +28,7 @@
 #include "bytestream.h"
 #include "internal.h"
 
-#define CACHE_DECODE_DATA 0 //taoanran add for catch the data from decoder !!! 
+#define CACHE_DECODE_DUP_DATA 1 //taoanran add for catch the data from decoder !!! 
 
 void ff_packet_free_side_data(AVPacket *pkt)
 {
@@ -199,19 +199,19 @@ static int copy_packet_data(AVPacket *pkt, AVPacket *src)
     pkt->destruct = dummy_destruct_packet;
 #endif
 
-#if CACHE_DECODE_DATA
+#if CACHE_DECODE_DUP_DATA
  	// catch the data, and insert into the file(ts)+++++++++++++++++++
 	FILE *fp = NULL;
-	int size = dst->size;
+	int size = src->size;
 	
-	fp = fopen("/home/taoanran/git/media/ffmpeg/fly.ts", "a+");
+	fp = fopen("./dup.ts", "ab+");
 	if (!fp)
 	{
 		av_log(NULL, AV_LOG_ERROR, "fopen error -------------\n");
 		return -1;
 	} 
 	
-	fwrite(src->data, 1, dst->size, fp);
+	fwrite(src->data, 1, src->size, fp);
 	fclose(fp);
 	fp = NULL; 
 	// ---------------------------------------------------------------- 

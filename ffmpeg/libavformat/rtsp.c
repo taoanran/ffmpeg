@@ -109,6 +109,15 @@ static const AVOption rtp_options[] = {
     { NULL },
 };
 
+//catch the RTSP's media data(audio and video)
+#define RTSP_MEDIA_CATCH_DATA 1//taoanran add for catch the  data (1:  catch the data,     0: not catch the data)!!!
+
+#if RTSP_MEDIA_CATCH_DATA
+#define CATCH_FILE "./catch_rtsp_media.ts"
+#endif
+
+//---------------------------------------
+
 static void get_word_until_chars(char *buf, int buf_size,
                                  const char *sep, const char **pp)
 {
@@ -1305,6 +1314,7 @@ int ff_rtsp_make_setup_request(AVFormatContext *s, const char *host, int port,
 
         rtp_opened:
             port = ff_rtp_get_local_rtp_port(rtsp_st->rtp_handle);
+			av_log(NULL, AV_LOG_INFO, "rtp port = %d\n", port);
         have_port:
             snprintf(transport, sizeof(transport) - 1,
                      "%s/UDP;", trans_pref);
@@ -1361,6 +1371,7 @@ int ff_rtsp_make_setup_request(AVFormatContext *s, const char *host, int port,
                         rt->session_id, real_res, real_csum);
         }
         ff_rtsp_send_cmd(s, "SETUP", rtsp_st->control_url, cmd, reply, NULL);
+		av_log(NULL, AV_LOG_INFO, "cmd = %s\n", cmd);
         if (reply->status_code == 461 /* Unsupported protocol */ && i == 0) {
             err = 1;
             goto fail;
@@ -1421,7 +1432,10 @@ int ff_rtsp_make_setup_request(AVFormatContext *s, const char *host, int port,
              */
             if (!(rt->server_type == RTSP_SERVER_WMS && i > 1) && s->iformat &&
                 CONFIG_RTPDEC)
-                ff_rtp_send_punch_packets(rtsp_st->rtp_handle);
+            	{
+            		av_log(NULL, AV_LOG_INFO, "NAT transfer\n");
+                	ff_rtp_send_punch_packets(rtsp_st->rtp_handle);
+            	}
             break;
         }
         case RTSP_LOWER_TRANSPORT_UDP_MULTICAST: {
@@ -1480,6 +1494,8 @@ void ff_rtsp_close_connections(AVFormatContext *s)
 
 int ff_rtsp_connect(AVFormatContext *s)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ---------------- [%d] [%s]\n", __func__, __LINE__, __FILE__);
+
     RTSPState *rt = s->priv_data;
     char host[1024], path[1024], tcpname[1024], cmd[2048], auth[128];
     int port, err, tcp_fd;
@@ -1655,11 +1671,22 @@ redirect:
                        "GUID: 00000000-0000-0000-0000-000000000000\r\n",
                        sizeof(cmd));
         ff_rtsp_send_cmd(s, "OPTIONS", rt->control_uri, cmd, reply, NULL);
+		av_log(NULL, AV_LOG_INFO, "cmd = %s\n", cmd);
         if (reply->status_code != RTSP_STATUS_OK) {
             err = AVERROR_INVALIDDATA;
             goto fail;
         }
 
+		if(rt->server_type == RTSP_SERVER_RTP)
+			av_log(NULL, AV_LOG_INFO, "RTSP's server = RTSP_SERVER_RTP");
+		else if(rt->server_type == RTSP_SERVER_RTP)
+			av_log(NULL, AV_LOG_INFO, "RTSP's server = RTSP_SERVER_REAL");
+		else if(rt->server_type == RTSP_SERVER_RTP)
+			av_log(NULL, AV_LOG_INFO, "RTSP's server = RTSP_SERVER_WMS");
+		else
+			av_log(NULL, AV_LOG_INFO, "RTSP's server = RTSP_SERVER_NB");
+	
+		
         /* detect server type if not standard-compliant RTP */
         if (rt->server_type != RTSP_SERVER_REAL && reply->real_challenge[0]) {
             rt->server_type = RTSP_SERVER_REAL;
@@ -1671,6 +1698,7 @@ redirect:
         break;
     }
 
+	av_log(NULL, AV_LOG_INFO, "s->iformat->name = %s\n", s->iformat->name);
     if (s->iformat && CONFIG_RTSP_DEMUXER)
         err = ff_rtsp_setup_input_streams(s, reply);
     else if (CONFIG_RTSP_MUXER)
@@ -1850,6 +1878,7 @@ static int pick_stream(AVFormatContext *s, RTSPStream **rtsp_st,
 
 int ff_rtsp_fetch_packet(AVFormatContext *s, AVPacket *pkt)
 {
+	//av_log(NULL, AV_LOG_INFO, "[%s] --------------  [%d] [%s]\n", __func__, __LINE__, __FILE__);
     RTSPState *rt = s->priv_data;
     int ret, len;
     RTSPStream *rtsp_st, *first_queue_st = NULL;
@@ -1921,7 +1950,22 @@ redo:
 #endif
     case RTSP_LOWER_TRANSPORT_UDP:
     case RTSP_LOWER_TRANSPORT_UDP_MULTICAST:
+	av_log(NULL, AV_LOG_INFO, "[%s] ---------------------- lower_transport = %d [%d][%s]\n", __func__, rt->lower_transport, __LINE__, __FILE__);
         len = udp_read_packet(s, &rtsp_st, rt->recvbuf, RECVBUF_SIZE, wait_end);
+			//taoanran add
+	#if RTSP_MEDIA_CATCH_DATA 
+				FILE *m_rtsp_media_fp = NULL;
+				m_rtsp_media_fp = fopen(CATCH_FILE, "ab+");
+				if (NULL == m_rtsp_media_fp)
+				{
+					av_log(NULL, AV_LOG_ERROR, "[%s] ---------------------- fopen error !!! [%d][%s]\n", __func__, __LINE__, __FILE__);
+					return -1;
+				}
+				if (len > 0)
+					fwrite( rt->recvbuf , 1, len, m_rtsp_media_fp);
+				fclose(m_rtsp_media_fp);	
+				m_rtsp_media_fp = NULL;
+	#endif
         if (len > 0 && rtsp_st->transport_priv && rt->transport == RTSP_TRANSPORT_RTP)
             ff_rtp_check_and_send_back_rr(rtsp_st->transport_priv, rtsp_st->rtp_handle, NULL, len);
         break;
@@ -2015,6 +2059,7 @@ end:
         /* more packets may follow, so we save the RTP context */
         rt->cur_transport_priv = rtsp_st->transport_priv;
 
+	//av_log(NULL, AV_LOG_INFO, "[%s] -------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);
     return ret;
 }
 #endif /* CONFIG_RTPDEC */
@@ -2127,6 +2172,7 @@ AVInputFormat ff_sdp_demuxer = {
 #if CONFIG_RTP_DEMUXER
 static int rtp_probe(AVProbeData *p)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] -------------------------- [%d] [%s]\n", __func__, __LINE__, __FILE__);
     if (av_strstart(p->filename, "rtp:", NULL))
         return AVPROBE_SCORE_MAX;
     return 0;
@@ -2134,6 +2180,7 @@ static int rtp_probe(AVProbeData *p)
 
 static int rtp_read_header(AVFormatContext *s)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] -------------- IN [%d] [%s]\n", __func__, __LINE__, __FILE__);
     uint8_t recvbuf[RTP_MAX_PACKET_LENGTH];
     char host[500], sdp[500];
     int ret, port;
@@ -2213,12 +2260,14 @@ static int rtp_read_header(AVFormatContext *s)
 
     ret = sdp_read_header(s);
     s->pb = NULL;
+	av_log(NULL, AV_LOG_INFO, "[%s] -------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);
     return ret;
 
 fail:
     if (in)
         ffurl_close(in);
     ff_network_close();
+	av_log(NULL, AV_LOG_INFO, "[%s] -------------- OUT(fail) [%d] [%s]\n", __func__, __LINE__, __FILE__);
     return ret;
 }
 

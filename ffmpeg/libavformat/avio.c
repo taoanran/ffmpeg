@@ -199,6 +199,10 @@ int ffurl_connect(URLContext* uc, AVDictionary **options)
            
            return err;
    } 
+   else
+   {
+		av_log(NULL, AV_LOG_INFO, "%s ------------------ (url) = %s --------[%d][%s]\n", __func__, uc->prot->name, __LINE__, __FILE__);
+   }
     uc->is_connected = 1;
     //We must be careful here as ffurl_seek() could be slow, for example for http
     if(   (uc->flags & AVIO_FLAG_WRITE)

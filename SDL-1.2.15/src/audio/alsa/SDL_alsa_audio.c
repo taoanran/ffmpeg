@@ -305,6 +305,7 @@ static __inline__ void swizzle_alsa_channels(_THIS)
 
 static void ALSA_PlayAudio(_THIS)
 {
+	printf("[%s] ----------------------- IN [%d][%s]\n", __func__, __LINE__, __FILE__);
 	int status;
 	snd_pcm_uframes_t frames_left;
 	const Uint8 *sample_buf = (const Uint8 *) mixbuf;
@@ -337,6 +338,7 @@ static void ALSA_PlayAudio(_THIS)
 		sample_buf += status * frame_size;
 		frames_left -= status;
 	}
+	printf("[%s] ----------------------- OUT [%d][%s]\n", __func__, __LINE__, __FILE__);
 }
 
 static Uint8 *ALSA_GetAudioBuf(_THIS)
@@ -462,6 +464,9 @@ static int ALSA_set_buffer_size(_THIS, SDL_AudioSpec *spec, snd_pcm_hw_params_t 
 
 static int ALSA_OpenAudio(_THIS, SDL_AudioSpec *spec)
 {
+	printf("[%s] ----------------------- IN [%d][%s]\n", __func__, __LINE__, __FILE__);
+
+
 	int                  status;
 	snd_pcm_hw_params_t *hwparams;
 	snd_pcm_sw_params_t *swparams;
@@ -614,6 +619,7 @@ static int ALSA_OpenAudio(_THIS, SDL_AudioSpec *spec)
 	/* Switch to blocking mode for playback */
 	SDL_NAME(snd_pcm_nonblock)(pcm_handle, 0);
 
+	printf("[%s] ----------------------- OUT [%d][%s]\n", __func__, __LINE__, __FILE__);
 	/* We're ready to rock and roll. :-) */
 	return(0);
 }

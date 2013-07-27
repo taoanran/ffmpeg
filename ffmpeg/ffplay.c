@@ -2463,8 +2463,11 @@ static int stream_component_open(VideoState *is, int stream_index)
         case AVMEDIA_TYPE_VIDEO   : is->last_video_stream    = stream_index; forced_codec_name =    video_codec_name; break;
     }
     if (forced_codec_name)
+    {
         codec = avcodec_find_decoder_by_name(forced_codec_name);
-    if (!codec) {
+		av_log(NULL, AV_LOG_INFO, "forced_codec_name = %s (stream_component_open)\n", forced_codec_name);
+	}
+	if (!codec) {
         if (forced_codec_name) fprintf(stderr, "No codec could be found with name '%s'\n", forced_codec_name);
         else                   fprintf(stderr, "No codec could be found with id %d\n", avctx->codec_id);
         return -1;

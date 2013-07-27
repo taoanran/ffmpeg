@@ -40,7 +40,7 @@
 #include "log.h"
 
 #define LINE_SZ 1024
-#define LOG_FILE 1
+#define LOG_FILE
 
 static int av_log_level = AV_LOG_INFO;
 static int flags;
@@ -216,7 +216,8 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
         return;
     format_line(ptr, level, fmt, vl, part, sizeof(part[0]), &print_prefix, type);
     snprintf(line, sizeof(line), "%s%s%s", part[0], part[1], part[2]);
-#if LOG_FILE
+
+#ifdef LOG_FILE
     FILE *fp = NULL;
     fp = fopen("./log_ffmpeg.txt", "a+");
     fwrite(line, 1, strlen(line), fp);
@@ -224,6 +225,8 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
     fp = NULL;
 #endif
 
+	
+>>>>>>> rtsp
 #if HAVE_ISATTY
     if (!is_atty)
         is_atty = isatty(2) ? 1 : -1;
@@ -246,7 +249,6 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
     colored_fputs(type[1], part[1]);
     sanitize(part[2]);
     colored_fputs(av_clip(level >> 3, 0, 6), part[2]);
-
 }
 
 static void (*av_log_callback)(void*, int, const char*, va_list) =

@@ -58,6 +58,8 @@ static const AVClass tcp_context_class = {
 /* return non zero if error */
 static int tcp_open(URLContext *h, const char *uri, int flags)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------ IN [%d] [%s]\n", __func__, __LINE__, __FILE__);	
+
     struct addrinfo hints = { 0 }, *ai, *cur_ai;
     int port, fd = -1;
     TCPContext *s = h->priv_data;
@@ -194,6 +196,13 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
     h->is_streamed = 1;
     s->fd = fd;
     freeaddrinfo(ai);
+	
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------ uri = %s [%d] [%s]\n", __func__, uri, __LINE__, __FILE__);
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------ hostname = %s [%d] [%s]\n", __func__, hostname, __LINE__, __FILE__);
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------ port = %d [%d] [%s]\n", __func__, port, __LINE__, __FILE__);
+	
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------ OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);
+
     return 0;
 
  fail:

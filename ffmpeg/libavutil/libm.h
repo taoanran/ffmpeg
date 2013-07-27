@@ -143,7 +143,7 @@ static inline double rint(double x)
     return x >= 0 ? floor(x + 0.5) : ceil(x - 0.5);
 }
 #endif /* HAVE_RINT */
-
+#if 0
 #if !HAVE_LRINT
 static av_always_inline av_const long int lrint(double x)
 {
@@ -185,5 +185,5 @@ static av_always_inline av_const float truncf(float x)
     return (x > 0) ? floor(x) : ceil(x);
 }
 #endif /* HAVE_TRUNCF */
-
+#endif
 #endif /* AVUTIL_LIBM_H */

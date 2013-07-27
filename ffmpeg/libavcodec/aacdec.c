@@ -121,11 +121,20 @@ static int output_configure(AACContext *ac,
 #define overread_err "Input buffer exhausted before END element found\n"
 
 //catch the decoder's data(AAC data)
-#define AAC_CATCH_DATA 1//taoanran add for catch the AAC data (1:  catch the data,     0: not catch the data)!!!
+#define AAC_CATCH_DATA 0//taoanran add for catch the AAC data (1:  catch the data,     0: not catch the data)!!!
 
 #if AAC_CATCH_DATA 
-#define CATCH_FILE "./catch.aac" 
-static FILE *m_fp_catch = NULL;
+#define CATCH_AAC_FILE "./catch.aac" 
+static FILE *m_aac_fp_catch = NULL;
+#endif
+//---------------------------------------
+
+//catch the decoder's data(PCM data)
+#define PCM_CATCH_DATA 0//taoanran add for catch the PCM data (1:  catch the data,     0: not catch the data)!!!
+
+#if PCM_CATCH_DATA 
+#define CATCH_PCM_FILE "./catch.pcm" 
+static FILE *m_pcm_fp_catch = NULL;
 #endif
 //---------------------------------------
 
@@ -978,14 +987,22 @@ static av_cold int aac_decode_init(AVCodecContext *avctx)
     cbrt_tableinit();
 
 #if AAC_CATCH_DATA
-	m_fp_catch = fopen(CATCH_FILE, "ab+");
-	if (NULL == m_fp_catch) 
+	m_aac_fp_catch = fopen(CATCH_AAC_FILE, "ab+");
+	if (NULL == m_aac_fp_catch) 
 	{
 		av_log(NULL, AV_LOG_ERROR, "[%s] ---------------------- fopen error !!! [%d][%s]\n", __func__, __LINE__, __FILE__);
 		return -1; 
 	}
 #endif
 
+#if PCM_CATCH_DATA
+	m_pcm_fp_catch = fopen(CATCH_PCM_FILE, "ab+");
+	if (NULL == m_pcm_fp_catch) 
+	{
+		av_log(NULL, AV_LOG_ERROR, "[%s] ---------------------- fopen error !!! [%d][%s]\n", __func__, __LINE__, __FILE__);
+		return -1; 
+	}
+#endif
     return 0;
 }
 
@@ -2642,10 +2659,10 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
         ac->oc[1].status = OC_LOCKED;
     }
 	
-	//catch the decoder's data(pcm data)
-#if AAC_CATCH_DATA	
-	if (m_fp_catch != NULL)    
-		fwrite(gb->buffer, 1, gb->buffer_end - gb->buffer, m_fp_catch); 
+	//catch the decoder's data(aac data)
+#if AAC_CATCH_DATA
+	if (m_aac_fp_catch != NULL)    
+		fwrite(gb->buffer, 1, gb->buffer_end - gb->buffer, m_aac_fp_catch); 
 #endif
 	//---------------------------------------
 
@@ -2711,6 +2728,27 @@ static int aac_decode_frame(AVCodecContext *avctx, void *data,
     if ((err = aac_decode_frame_int(avctx, data, got_frame_ptr, &gb, avpkt)) < 0)
         return err;
 
+	//catch the decoder's data(pcm data)
+#if PCM_CATCH_DATA                                                                                
+	if (m_pcm_fp_catch != NULL)
+	{
+		av_log(NULL, AV_LOG_INFO, "((AVFrame *)data)->channels = %d\n", ((AVFrame *)data)->channels);
+		for(int i=0; i < 8; /*((AVFrame *)data)->channels;*/ i++)
+		{
+//			printf("i = %d\n", i);
+			//fwrite(avpkt->data, 1, avpkt->size, m_pcm_fp_catch);
+			if (((AVFrame *)data)->buf[i] != NULL)
+				fwrite(((AVFrame *)data)->buf[i]->data, 1, ((AVFrame *)data)->buf[i]->size, m_pcm_fp_catch);
+		}
+		for (int i=0; i<((AVFrame *)data)->nb_extended_buf; i++)
+		{
+			if (((AVFrame *)data)->extended_buf[i] != NULL)
+				fwrite(((AVFrame *)data)->extended_buf[i]->data, 1, ((AVFrame *)data)->extended_buf[i]->size, m_pcm_fp_catch);
+		}
+	}
+#endif 
+	//---------------------------------------
+
     buf_consumed = (get_bits_count(&gb) + 7) >> 3;
     for (buf_offset = buf_consumed; buf_offset < buf_size; buf_offset++)
         if (buf[buf_offset])
@@ -2736,10 +2774,18 @@ static av_cold int aac_decode_close(AVCodecContext *avctx)
     ff_mdct_end(&ac->mdct_small);
     ff_mdct_end(&ac->mdct_ltp);
 #if AAC_CATCH_DATA
-	if (m_fp_catch != NULL)
+	if (m_aac_fp_catch != NULL)
 	{   
-		fclose(m_fp_catch);     
-		m_fp_catch = NULL;
+		fclose(m_aac_fp_catch);     
+		m_aac_fp_catch = NULL;
+	}
+#endif
+ 
+#if PCM_CATCH_DATA
+	if (m_pcm_fp_catch != NULL)
+	{
+		fclose(m_pcm_fp_catch);
+		m_pcm_fp_catch = NULL;
 	}
 #endif
     return 0;
