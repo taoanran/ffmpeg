@@ -132,6 +132,8 @@ static void build_udp_url(char *buf, int buf_size,
 
 static int rtp_open(URLContext *h, const char *uri, int flags)
 {
+	av_log(NULL, AV_LOG_INFO, "------------------- rtp_open --------------------\n");
+
     RTPContext *s = h->priv_data;
     int rtp_port, rtcp_port,
         ttl, connect,

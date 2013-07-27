@@ -120,18 +120,23 @@ int ff_frame_thread_encoder_init(AVCodecContext *avctx, AVDictionary *options){
     int i=0;
     ThreadContext *c;
 
-
+    av_log(NULL, AV_LOG_INFO, "[%s] --------------------------- IN [%d] [%s]\n", __func__, __LINE__, __FILE__);
     if(   !(avctx->thread_type & FF_THREAD_FRAME)
        || !(avctx->codec->capabilities & CODEC_CAP_INTRA_ONLY))
+    {
+        av_log(NULL, AV_LOG_INFO, "[%s] ----------------avctx->thread_type = %d ----------- OUT(!(avctx->codec->capabilities & CODEC_CAP_INTRA_ONLY)) [%d] [%s]\n", __func__, avctx->thread_type, __LINE__, __FILE__);
         return 0;
-
+    }
     if(!avctx->thread_count) {
         avctx->thread_count = ff_get_logical_cpus(avctx);
         avctx->thread_count = FFMIN(avctx->thread_count, MAX_THREADS);
     }
 
     if(avctx->thread_count <= 1)
+    {
+        av_log(NULL, AV_LOG_INFO, "[%s] --------------------------- OUT(avctx->thread_count) [%d] [%s]\n", __func__, __LINE__, __FILE__);
         return 0;
+    }
 
     if(avctx->thread_count > MAX_THREADS)
         return AVERROR(EINVAL);
@@ -183,6 +188,7 @@ int ff_frame_thread_encoder_init(AVCodecContext *avctx, AVDictionary *options){
 
     avctx->active_thread_type = FF_THREAD_FRAME;
 
+    av_log(NULL, AV_LOG_INFO, "[%s] --------------------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);
     return 0;
 fail:
     avctx->thread_count = i;

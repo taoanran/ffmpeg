@@ -61,6 +61,8 @@ static const AVClass crypto_class = {
 
 static int crypto_open2(URLContext *h, const char *uri, int flags, AVDictionary **options)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ---------------------- IN [%d][%s]\n", __func__, __LINE__, __FILE__);
+
     const char *nested_url;
     int ret = 0;
     CryptoContext *c = h->priv_data;
@@ -96,6 +98,8 @@ static int crypto_open2(URLContext *h, const char *uri, int flags, AVDictionary 
     av_aes_init(c->aes, c->key, 128, 1);
 
     h->is_streamed = 1;
+	
+	av_log(NULL, AV_LOG_INFO, "[%s] ---------------------- OUT [%d][%s]\n", __func__, __LINE__, __FILE__);
 
 err:
     return ret;

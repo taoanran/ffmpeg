@@ -498,6 +498,9 @@ end:
 /* return non zero if error */
 static int udp_open(URLContext *h, const char *uri, int flags)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- IN [%d] [%s]\n", __func__, __LINE__, __FILE__);	
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- uri = %s [%d] [%s]\n", __func__, uri, __LINE__, __FILE__);
+
     char hostname[1024], localaddr[1024] = "";
     int port, udp_fd = -1, tmp, bind_ret = -1;
     UDPContext *s = h->priv_data;
@@ -591,6 +594,7 @@ static int udp_open(URLContext *h, const char *uri, int flags)
 
     /* fill the dest addr */
     av_url_split(NULL, 0, NULL, 0, hostname, sizeof(hostname), &port, NULL, 0, uri);
+	
 
     /* XXX: fix av_url_split */
     if (hostname[0] == '\0' || hostname[0] == '?') {
@@ -716,6 +720,10 @@ static int udp_open(URLContext *h, const char *uri, int flags)
     }
 #endif
 
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- hostname = %s [%d] [%s]\n", __func__, hostname, __LINE__, __FILE__);
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- port = %d [%d] [%s]\n", __func__, port, __LINE__, __FILE__);	
+
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);	
     return 0;
 #if HAVE_PTHREAD_CANCEL
  thread_fail:
@@ -729,6 +737,7 @@ static int udp_open(URLContext *h, const char *uri, int flags)
     av_fifo_free(s->fifo);
     for (i = 0; i < num_sources; i++)
         av_freep(&sources[i]);
+	av_log(NULL, AV_LOG_INFO, "[%s] ------------------------- OUT [%d] [%s]\n", __func__, __LINE__, __FILE__);	
     return AVERROR(EIO);
 }
 

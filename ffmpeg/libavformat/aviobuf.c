@@ -803,6 +803,7 @@ int avio_open(AVIOContext **s, const char *filename, int flags)
 int avio_open2(AVIOContext **s, const char *filename, int flags,
                const AVIOInterruptCB *int_cb, AVDictionary **options)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s]-----------------------[%d][%s]\n", __func__, __LINE__, __FILE__);
     URLContext *h;
     int err;
 

@@ -591,7 +591,7 @@ int ff_rtsp_setup_input_streams(AVFormatContext *s, RTSPMessageHeader *reply)
         return AVERROR_INVALIDDATA;
     }
 
-    av_log(s, AV_LOG_VERBOSE, "SDP:\n%s\n", content);
+    av_log(s, AV_LOG_INFO, "SDP:\n%s\n", content);
     /* now we got the SDP description, we parse it */
     ret = ff_sdp_parse(s, (const char *)content);
     av_freep(&content);
@@ -603,6 +603,8 @@ int ff_rtsp_setup_input_streams(AVFormatContext *s, RTSPMessageHeader *reply)
 
 static int rtsp_listen(AVFormatContext *s)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s] ---------------- [%d] [%s]\n", __func__, __LINE__, __FILE__);
+
     RTSPState *rt = s->priv_data;
     char host[128], path[512], auth[128];
     char uri[500];
@@ -668,6 +670,7 @@ static int rtsp_listen(AVFormatContext *s)
 
 static int rtsp_probe(AVProbeData *p)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s]------------------------------[%s]\n", __func__, __FILE__);
     if (av_strstart(p->filename, "rtsp:", NULL))
         return AVPROBE_SCORE_MAX;
     return 0;
@@ -675,6 +678,7 @@ static int rtsp_probe(AVProbeData *p)
 
 static int rtsp_read_header(AVFormatContext *s)
 {
+	av_log(NULL, AV_LOG_INFO, "[%s]------------------------------[%s]\n", __func__, __FILE__);
     RTSPState *rt = s->priv_data;
     int ret;
 
