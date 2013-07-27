@@ -211,6 +211,8 @@ void Core_CloseAudio(_THIS)
 
 int Core_OpenAudio(_THIS, SDL_AudioSpec *spec)
 {
+	printf("Core_OpenAudio\n");
+
     OSStatus result = noErr;
     Component comp;
     ComponentDescription desc;

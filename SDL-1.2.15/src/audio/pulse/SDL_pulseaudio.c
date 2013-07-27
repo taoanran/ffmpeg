@@ -424,6 +424,7 @@ static void PULSE_WaitDone(_THIS)
 
 static int PULSE_OpenAudio(_THIS, SDL_AudioSpec *spec)
 {
+	printf("[%s] -------------------------- IN [%d][%s]\n", __func__, __LINE__, __FILE__);
 	int             state;
 	Uint16          test_format;
 	pa_sample_spec  paspec;
@@ -566,5 +567,6 @@ static int PULSE_OpenAudio(_THIS, SDL_AudioSpec *spec)
 		}
 	} while (state != PA_STREAM_READY);
 
+	printf("[%s] -------------------------- IN [%d][%s]\n", __func__, __LINE__, __FILE__);
 	return(0);
 }

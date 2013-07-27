@@ -211,6 +211,7 @@ DECLSPEC SDL_Thread * SDLCALL SDL_CreateThread(int (SDLCALL *fn)(void *), void *
 DECLSPEC SDL_Thread * SDLCALL SDL_CreateThread(int (SDLCALL *fn)(void *), void *data)
 #endif
 {
+	printf("taoanran add in SDL_CreateThread\n");
 	SDL_Thread *thread;
 	thread_args *args;
 	int ret;

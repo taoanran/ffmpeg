@@ -162,6 +162,7 @@ static void DSP_CloseAudio(_THIS)
 
 static int DSP_OpenAudio(_THIS, SDL_AudioSpec *spec)
 {
+	printf("DSP_OpenAudio [%s]\n", __FILE__);
 	char audiodev[1024];
 	int format;
 	int value;

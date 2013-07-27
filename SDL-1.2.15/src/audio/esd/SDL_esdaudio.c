@@ -272,6 +272,7 @@ static char *get_progname(void)
 static int ESD_OpenAudio(_THIS, SDL_AudioSpec *spec)
 {
 	esd_format_t format;
+	printf("[%s] --------------------- [%d] [%s]\n", __func__, __LINE__, __FILE__);
 
 	/* Convert audio spec to the ESD audio format */
 	format = (ESD_STREAM | ESD_PLAY);
