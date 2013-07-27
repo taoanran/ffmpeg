@@ -512,7 +512,7 @@ fail:
 }
 
 //taoanran add  for catch the YUV420P data +++++++++++++++++++++++++++++++++++++++++
-#if CATCH_YUV_DECODER
+#ifdef CATCH_YUV_DECODER
 static void saveYUV420P(unsigned char *buf, int wrap, int xsize ,int ysize)
 {
     FILE *f = NULL;
