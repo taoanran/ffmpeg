@@ -389,7 +389,7 @@ AVInputFormat *av_probe_input_format3(AVProbeData *pd, int is_opened, int *score
             fmt = NULL;
     }
     *score_ret= score_max;
-	av_log(NULL, AV_LOG_INFO, "fmt = %s\n", fmt->name);
+
     return fmt;
 }
 

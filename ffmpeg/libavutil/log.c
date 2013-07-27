@@ -226,7 +226,6 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
 #endif
 
 	
->>>>>>> rtsp
 #if HAVE_ISATTY
     if (!is_atty)
         is_atty = isatty(2) ? 1 : -1;
