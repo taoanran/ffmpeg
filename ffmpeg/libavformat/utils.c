@@ -788,7 +788,7 @@ int ff_read_packet(AVFormatContext *s, AVPacket *pkt)
     int ret, i;
     AVStream *st;
 
-	av_log(s, AV_LOG_INFO, "[%s] ------------------ [%d][%s]\n", __func__, __LINE__, __FILE__);
+	//av_log(s, AV_LOG_INFO, "[%s] ------------------ [%d][%s]\n", __func__, __LINE__, __FILE__);
 
 	for(;;){
         AVPacketList *pktl = s->raw_packet_buffer;
@@ -809,7 +809,7 @@ int ff_read_packet(AVFormatContext *s, AVPacket *pkt)
         pkt->data = NULL;
         pkt->size = 0;
         av_init_packet(pkt);
-		av_log(NULL, AV_LOG_INFO, "read_packet(formatName) = %s\n",  s->iformat->name);
+		//av_log(NULL, AV_LOG_INFO, "read_packet(formatName) = %s\n",  s->iformat->name);
         ret= s->iformat->read_packet(s, pkt);
         if (ret < 0) {
             if (!pktl || ret == AVERROR(EAGAIN))

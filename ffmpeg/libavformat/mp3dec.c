@@ -226,7 +226,7 @@ static int mp3_read_header(AVFormatContext *s)
 
 static int mp3_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
-	printf("mp3_read_packet\n");
+	//printf("mp3_read_packet\n");
     MP3Context *mp3 = s->priv_data;
     int ret, size;
     int64_t pos;
