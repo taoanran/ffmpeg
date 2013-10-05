@@ -4,7 +4,7 @@ pushd SDL-1.2.15
 popd
 
 pushd ffmpeg
-./ffmpeg/configure; make;sudo make install
+./configure; make;sudo make install
 popd
 
 echo "build end !!!!!!!!!!!!!!"
