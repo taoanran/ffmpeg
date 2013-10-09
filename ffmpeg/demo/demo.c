@@ -44,18 +44,19 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+
 #define DECODED_AUDIO_BUFFER_SIZE 192000
 struct options
 {
-    int streamId;
+//    int streamId;
     int frames;
     int nodec;
     int bplay;
     int thread_count;
     int64_t lstart;
     char finput[256];
-    char foutput1[256];
-    char foutput2[256];
+    //char foutput1[256];
+    //char foutput2[256];
 };
 
 static int Myparse_option(struct options *opts, int argc, char** argv)
@@ -63,16 +64,17 @@ static int Myparse_option(struct options *opts, int argc, char** argv)
     int optidx;
     char *optstr;
     if (argc < 2) return -1;
-    opts->streamId = -1;
+    //opts->streamId = -1;
     opts->lstart = -1;
     opts->frames = -1;
-    opts->foutput1[0] = 0;
-    opts->foutput2[0] = 0;
+   // opts->foutput1[0] = 0;
+    //opts->foutput2[0] = 0;
     opts->nodec = 0;
     opts->bplay = 0;
     opts->thread_count = 0;
     strcpy(opts->finput, argv[1]);
     optidx = 2;
+#if 0	
     while (optidx < argc)
     {
         optstr = argv[optidx++];
@@ -108,7 +110,7 @@ static int Myparse_option(struct options *opts, int argc, char** argv)
             return -1;
         }
     }
- 
+ #endif
     return 0;
 }
 static void Myshow_help(char* program)
@@ -277,7 +279,192 @@ void close_video(struct video_fb *fb)
     }
 }
 
- 
+
+
+// check the audio stream
+static int find_audio_stream(AVFormatContext* pCtx)
+{
+	int audioStream = -1;
+	int i;
+	// check the audio stream
+ 	for (i = 0; i < pCtx->nb_streams; i++)
+	{
+        if (pCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO)
+        {
+            audioStream = i;
+			break;
+        }
+    }
+
+	return audioStream;
+}
+
+
+
+
+#define SDL_AUDIO_BUFFER_SIZE 1024  
+static int sws_flags = SWS_BICUBIC;  
+  
+typedef struct PacketQueue  
+{  
+    AVPacketList *first_pkt, *last_pkt;  
+    int nb_packets;  
+    int size;  
+    SDL_mutex *mutex;  
+    SDL_cond *cond;  
+} PacketQueue;  
+PacketQueue audioq;  
+int quit = 0;  
+void packet_queue_init(PacketQueue *q)  
+{  
+    memset(q, 0, sizeof(PacketQueue));  
+    q->mutex = SDL_CreateMutex();  
+    q->cond = SDL_CreateCond();  
+}  
+int packet_queue_put(PacketQueue *q, AVPacket *pkt)  
+{  
+    AVPacketList *pkt1;  
+    if(av_dup_packet(pkt) < 0)  
+    {  
+        return -1;  
+    }  
+    pkt1 = (AVPacketList *)av_malloc(sizeof(AVPacketList));  
+    if (!pkt1)  
+        return -1;  
+    pkt1->pkt = *pkt;  
+    pkt1->next = NULL;  
+    SDL_LockMutex(q->mutex);  
+    if (!q->last_pkt)  
+        q->first_pkt = pkt1;  
+    else  
+        q->last_pkt->next = pkt1;  
+    q->last_pkt = pkt1;  
+    q->nb_packets++;  
+    q->size += pkt1->pkt.size;  
+    SDL_CondSignal(q->cond);  
+    SDL_UnlockMutex(q->mutex);  
+    return 0;  
+}  
+static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)  
+{  
+    AVPacketList *pkt1;  
+    int ret;  
+    SDL_LockMutex(q->mutex);  
+    for(;;)  
+    {  
+        if(quit)  
+        {  
+            ret = -1;  
+            break;  
+        }  
+        pkt1 = q->first_pkt;  
+        if (pkt1)  
+        {  
+            q->first_pkt = pkt1->next;  
+            if (!q->first_pkt)  
+                q->last_pkt = NULL;  
+            q->nb_packets--;  
+            q->size -= pkt1->pkt.size;  
+            *pkt = pkt1->pkt;  
+            av_free(pkt1);  
+            ret = 1;  
+            break;  
+        }  
+        else if (!block)  
+        {  
+            ret = 0;  
+            break;  
+        }  
+        else  
+        {  
+            SDL_CondWait(q->cond, q->mutex);  
+        }  
+    }  
+    SDL_UnlockMutex(q->mutex);  
+    return ret;  
+}  
+#if 0  
+int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_size)  
+{  
+    static AVPacket pkt;  
+    static uint8_t *audio_pkt_data = NULL;  
+    static int audio_pkt_size = 0;  
+    int len1, data_size;  
+	AVFrame *pFrame = 0;
+	pFrame = avcodec_alloc_frame();
+
+	int got;
+    for(;;)  
+    {  
+        while(audio_pkt_size > 0)  
+        {  
+            data_size = buf_size;  
+			avcodec_decode_audio4(aCodecCtx, pFrame, &got, &packet);
+            len1 = avcodec_decode_audio2(aCodecCtx, (int16_t *)audio_buf, &data_size, audio_pkt_data, audio_pkt_size);  
+            if(len1 < 0)  
+            { /* if error, skip frame */  
+                audio_pkt_size = 0;  
+                break;  
+            }  
+            audio_pkt_data += len1;  
+            audio_pkt_size -= len1;  
+            if(data_size <= 0)  
+            { /* No data yet, get more frames */  
+                continue;  
+            } /* We have data, return it and come back for more later */  
+            return data_size;  
+        }  
+        if(pkt.data)  
+            av_free_packet(&pkt);  
+        if(quit)  
+        {  
+            return -1;  
+        }  
+        if(packet_queue_get(&audioq, &pkt, 1) < 0)  
+        {  
+            return -1;  
+        }  
+        audio_pkt_data = pkt.data;  
+        audio_pkt_size = pkt.size;  
+    }  
+}  
+#endif
+static void audio_callback(void *userdata, Uint8 *stream, int len)  
+{  
+#if 0
+    AVCodecContext *aCodecCtx = (AVCodecContext *)userdata;  
+    int len1, audio_size;  
+	#define AVCODEC_MAX_AUDIO_FRAME_SIZE  
+    static uint8_t audio_buf[(AVCODEC_MAX_AUDIO_FRAME_SIZE * 3) / 2];  
+    static unsigned int audio_buf_size = 0;  
+    static unsigned int audio_buf_index = 0;  
+    while(len > 0)  
+    {  
+        if(audio_buf_index >= audio_buf_size)  
+        { /* We have already sent all our data; get more */  
+            audio_size = audio_decode_frame(aCodecCtx, audio_buf, sizeof(audio_buf));  
+            if(audio_size < 0)  
+            { /* If error, output silence */  
+                audio_buf_size = 1024; // arbitrary?  
+                memset(audio_buf, 0, audio_buf_size);  
+            }  
+            else  
+            {  
+                audio_buf_size = audio_size;  
+            }  
+            audio_buf_index = 0;  
+        }  
+        len1 = audio_buf_size - audio_buf_index;  
+        if(len1 > len)  
+            len1 = len;  
+        memcpy(stream, (uint8_t *)audio_buf + audio_buf_index, len1);  
+        len -= len1;  
+        stream += len1;  
+        audio_buf_index += len1;  
+    }  
+	 #endif
+}  
+
 int main(int argc, char **argv)
 {
     AVFormatContext* pCtx = 0;
@@ -303,72 +490,148 @@ int main(int argc, char **argv)
     struct timeval elapsed1, elapsed2;
     int decoded = 0;
 
+	//taoanran add +++++++++
+	int ret = -1;
+	int audioStream = -1; //audio streamID
+	// ----------------------
+
+	int flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
+ #if 0
+    if (SDL_Init (flags)) {
+        fprintf(stderr, "Could not initialize SDL - %s\n", SDL_GetError());
+        fprintf(stderr, "(Did you set the DISPLAY variable?)\n");
+        exit(1);
+    }
+#endif
     av_register_all();
 
     av_log_set_callback(log_callback);
     av_log_set_level(50);
- 
+
     if (Myparse_option(&opt, argc, argv) < 0 || (strlen(opt.finput) == 0))
     {
         Myshow_help(argv[0]);
         return 0;
     }
+
     err = avformat_open_input(&pCtx, opt.finput, 0, 0);
     if (err < 0)
     {
         printf("\n->(avformat_open_input)\tERROR:\t%d\n", err);
         goto fail;
     }
+	printf("=========================\n");
     err = avformat_find_stream_info(pCtx, 0);
+
     if (err < 0)
     {
         printf("\n->(avformat_find_stream_info)\tERROR:\t%d\n", err);
         goto fail;
     }
-    if (opt.streamId < 0)
+	av_dump_format(pCtx, 0, opt.finput, 0);
+
+	// check the audio stream
+	audioStream = find_audio_stream(pCtx);
+	if (audioStream < 0)
+	{
+		printf("there is not audio stream !!!!!!! \n");
+		return -1;
+	}
+
+	pCodecCtx = pCtx->streams[audioStream]->codec;
+	pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
+ 	if (!pCodec)
     {
-        av_dump_format(pCtx, 0, pCtx->filename, 0);
+        printf("\ncan't find the audio decoder!\n");
         goto fail;
     }
-    else
-    {
-        printf("\n 额外的数据流 %d (�):", opt.streamId, pCtx->streams[opt.streamId]->codec->extradata_size);
-        for (i = 0; i < pCtx->streams[opt.streamId]->codec->extradata_size; i++)
-        {
-            if (i == 0) printf("\n");
-            printf("%2x ", pCtx->streams[opt.streamId]->codec->extradata[i]);
-        }
-    }
-    if (strlen(opt.foutput1) && strlen(opt.foutput2))
-    {
-        fpo1 = fopen(opt.foutput1, "wb");
-        fpo2 = fopen(opt.foutput2, "wb");
-        if (!fpo1 || !fpo2)
-        {
-            printf("\n->error 打开输出文件\n");
-            goto fail;
-        }
-        usefo = 1;
-    }
-    else
-    {
-        usefo = 0;
-    }
-    if (opt.streamId >= pCtx->nb_streams)
-    {
-        printf("\n->StreamId\tERROR\n");
-        goto fail;
-    }
-    if (opt.lstart > 0)
-    {
-        err = av_seek_frame(pCtx, opt.streamId, opt.lstart, AVSEEK_FLAG_ANY);
-        if (err < 0)
-        {
-            printf("\n->(av_seek_frame)\tERROR:\t%d\n", err);
-            goto fail;
-        }
-    }
-    if (!opt.nodec)
+
+	//open audioDecoder
+	ret = avcodec_open2(pCodecCtx, pCodec, 0);
+	if (ret < 0)
+	{
+		printf("avcodec_open2 error \n");
+		return -1;
+	}
+
+	pFrame = avcodec_alloc_frame();
+	pFrame->nb_samples = pCodecCtx->frame_size;
+	pFrame->format = pCodecCtx->sample_fmt;
+	pFrame->channel_layout = pCodecCtx->channel_layout;
+#if 0
+	//set the param of SDL
+	SDL_AudioSpec wanted_spec, spec; 
+	wanted_spec.freq = pCodecCtx->sample_rate;  
+	wanted_spec.format = AUDIO_S16SYS;  
+	wanted_spec.channels = pCodecCtx->channels;  
+	wanted_spec.silence = 0;  
+	wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;  
+	wanted_spec.callback = audio_callback;//audio_callback;  
+	wanted_spec.userdata = pCodecCtx;;//pCodecCtx;  
+	if(SDL_OpenAudio(&wanted_spec, &spec) < 0)  
+    {  
+        fprintf(stderr, "SDL_OpenAudio: %s/n", SDL_GetError());  
+        return -1;  
+    } 
+#endif			
+
+	 printf(" bit_rate = %d \r\n", pCodecCtx->bit_rate);
+     printf(" sample_rate = %d \r\n", pCodecCtx->sample_rate);
+     printf(" channels = %d \r\n", pCodecCtx->channels);
+     printf(" code_name = %s \r\n", pCodecCtx->codec->name);
+
+	char *data = NULL;
+	while(av_read_frame(pCtx, &packet) >= 0)
+	{
+		//found the  audio frame !!!
+		if (packet.stream_index == audioStream)
+		{
+			int got;
+			int i;
+		
+			avcodec_decode_audio4(pCodecCtx, pFrame, &got, &packet);
+			int data_size = av_samples_get_buffer_size(NULL,pCodecCtx->channels,pFrame->nb_samples,pCodecCtx->sample_fmt, 1);
+			if (data == NULL)
+			{
+				printf("malloc\n");
+				data = (char *)malloc(data_size);
+			}
+			memset(data,0,data_size);
+			short *sample_buffer_L = pFrame->extended_data[0];
+			short *sample_buffer_R = pFrame->extended_data[1];
+
+			if (pFrame->format == AV_SAMPLE_FMT_S16P)
+				printf("pFrame->format = AV_SAMPLE_FMT_S16P\n");
+			
+
+			FILE *fp = fopen("./demo.pcm", "ab+");
+			
+			if (fp != NULL)
+			{
+				//just test 2 channel(stero)
+				int i,j;
+				for ( i=0,j=0; i<data_size; i+=4,j++)
+				{	
+					//Left channel
+					data[i] = (char)(sample_buffer_L[j] & 0xff);
+					data[i+1] = (char)((sample_buffer_L[j]>>8) & 0xff);;
+					//Right channel
+					data[i+2] = (char)(sample_buffer_R[j] & 0xff);
+					data[i+3] = (char)((sample_buffer_R[j]>>8) & 0xff);;
+				}
+				
+				fwrite(data, data_size, 1, fp);
+				fclose(fp);
+				fp = NULL;
+			}
+			free (data);
+			data = NULL;
+		}
+	}
+	
+	return 0;
+#if 0	
+	if (!opt.nodec)
     {
         
         pCodecCtx = pCtx->streams[opt.streamId]->codec;
@@ -411,6 +674,7 @@ int main(int argc, char **argv)
         }
     }
     nframe = 0;
+	printf("=========================444444\n");
     while(nframe < opt.frames || opt.frames == -1)
     {
         gettimeofday(&elapsed1, NULL);
@@ -524,27 +788,16 @@ int main(int argc, char **argv)
     }
     printf("\n%d 帧解析, average %.2f us per frame\n", nframe, usecs2/nframe);
     printf("%d 帧解码，平均 %.2f 我们每帧\n", decoded, usecs1/decoded);
- 
+
+#endif
+
 fail:
     if (pCtx)
     {
         avformat_close_input(&pCtx);
     }
-    if (fpo1)
-    {
-        fclose(fpo1);
-    }
-    if (fpo2)
-    {
-        fclose(fpo2);
-    }
-    if (!pFrame)
-    {
-        av_free(pFrame);
-    }
-    if (!usefo && (dsp.audio_fd != -1))
-    {
-        close(dsp.audio_fd);
-    }
-    return 0;}
+
+
+    return 0;
+}
 
