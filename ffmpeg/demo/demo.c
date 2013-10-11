@@ -1,5 +1,5 @@
 /*
- * A demo of ffmpeg(play)
+ * A demo of ffmpeg(play), audio and video, we save the YUV and PCM into a file 
  *
  * */
 
@@ -279,6 +279,23 @@ void close_video(struct video_fb *fb)
     }
 }
 
+// check the video stream
+static int find_video_stream(AVFormatContext* pCtx)
+{
+	int videoStream = -1;
+	int i;
+	// check the video stream
+ 	for (i = 0; i < pCtx->nb_streams; i++)
+	{
+        if (pCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO)
+        {
+            videoStream = i;
+			break;
+        }
+    }
+
+	return videoStream;
+}
 
 
 // check the audio stream
@@ -299,6 +316,28 @@ static int find_audio_stream(AVFormatContext* pCtx)
 	return audioStream;
 }
 
+#define CATCH_YUV_FILE "./demoMy.yuv"
+static void saveYUV420P(unsigned char *buf, int wrap, int xsize ,int ysize)
+{
+    FILE *f = NULL;
+    int i;
+
+    if (buf == NULL)
+    {
+        av_log(NULL, AV_LOG_INFO, "buf == NULL\n");
+        return ;
+    }
+
+    f=fopen(CATCH_YUV_FILE, "ab+");
+    for(i=0;i<ysize;i++)
+    {
+        fwrite(buf + i * wrap, 1, xsize, f); 
+    }
+    fflush(f);
+    fclose(f);
+
+    f = NULL;
+}
 
 
 
@@ -468,10 +507,13 @@ static void audio_callback(void *userdata, Uint8 *stream, int len)
 int main(int argc, char **argv)
 {
     AVFormatContext* pCtx = 0;
-    AVCodecContext *pCodecCtx = 0;
-    AVCodec *pCodec = 0;
+    AVCodecContext *pCodecCtxAudio = 0;//audio
+	AVCodecContext *pCodecCtxVideo = 0;//video
+    AVCodec *pCodecAudio = 0;//audio
+	AVCodec *pCodecVideo = 0;//video
     AVPacket packet;
-    AVFrame *pFrame = 0;
+    AVFrame *pFrameAudio = 0;//audio
+	AVFrame *pFrameVideo = 0;//video
     FILE *fpo1 = NULL;
     FILE *fpo2 = NULL;
     int nframe;
@@ -493,6 +535,7 @@ int main(int argc, char **argv)
 	//taoanran add +++++++++
 	int ret = -1;
 	int audioStream = -1; //audio streamID
+	int videoStream = -1; //video streamID
 	// ----------------------
 
 	int flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
@@ -529,7 +572,7 @@ int main(int argc, char **argv)
         goto fail;
     }
 	av_dump_format(pCtx, 0, opt.finput, 0);
-
+// ************************AUDIO**********************************//
 	// check the audio stream
 	audioStream = find_audio_stream(pCtx);
 	if (audioStream < 0)
@@ -538,26 +581,55 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	pCodecCtx = pCtx->streams[audioStream]->codec;
-	pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
- 	if (!pCodec)
+	pCodecCtxAudio= pCtx->streams[audioStream]->codec;
+	pCodecAudio= avcodec_find_decoder(pCodecCtxAudio->codec_id);
+ 	if (!pCodecAudio)
     {
         printf("\ncan't find the audio decoder!\n");
         goto fail;
     }
 
 	//open audioDecoder
-	ret = avcodec_open2(pCodecCtx, pCodec, 0);
+	ret = avcodec_open2(pCodecCtxAudio, pCodecAudio, 0);
 	if (ret < 0)
 	{
 		printf("avcodec_open2 error \n");
 		return -1;
 	}
 
-	pFrame = avcodec_alloc_frame();
-	pFrame->nb_samples = pCodecCtx->frame_size;
-	pFrame->format = pCodecCtx->sample_fmt;
-	pFrame->channel_layout = pCodecCtx->channel_layout;
+	pFrameAudio = avcodec_alloc_frame();
+	pFrameAudio->nb_samples = pCodecCtxAudio->frame_size;
+	pFrameAudio->format = pCodecCtxAudio->sample_fmt;
+	pFrameAudio->channel_layout = pCodecCtxAudio->channel_layout;
+//------------------------------------------------------------------------//
+#if 1
+// ************************VIDEO**********************************//
+	// check the video stream
+	videoStream = find_video_stream(pCtx);
+	if (videoStream < 0)
+	{
+		printf("there is not video stream !!!!!!! \n");
+		return -1;
+	}
+
+	pCodecCtxVideo= pCtx->streams[videoStream]->codec;
+	pCodecVideo = avcodec_find_decoder(pCodecCtxVideo->codec_id);
+ 	if (!pCodecVideo)
+    {
+        printf("\ncan't find the video decoder!\n");
+        goto fail;
+    }
+
+	//open videoDecoder
+	ret = avcodec_open2(pCodecCtxVideo, pCodecVideo, 0);
+	if (ret < 0)
+	{
+		printf("avcodec_open2 error(video) \n");
+		return -1;
+	}
+	pFrameVideo = avcodec_alloc_frame();
+//------------------------------------------------------------------------//
+#endif	
 #if 0
 	//set the param of SDL
 	SDL_AudioSpec wanted_spec, spec; 
@@ -575,11 +647,6 @@ int main(int argc, char **argv)
     } 
 #endif			
 
-	 printf(" bit_rate = %d \r\n", pCodecCtx->bit_rate);
-     printf(" sample_rate = %d \r\n", pCodecCtx->sample_rate);
-     printf(" channels = %d \r\n", pCodecCtx->channels);
-     printf(" code_name = %s \r\n", pCodecCtx->codec->name);
-
 	char *data = NULL;
 	while(av_read_frame(pCtx, &packet) >= 0)
 	{
@@ -589,20 +656,20 @@ int main(int argc, char **argv)
 			int got;
 			int i;
 		
-			avcodec_decode_audio4(pCodecCtx, pFrame, &got, &packet);
-			int data_size = av_samples_get_buffer_size(NULL,pCodecCtx->channels,pFrame->nb_samples,pCodecCtx->sample_fmt, 1);
+			avcodec_decode_audio4(pCodecCtxAudio, pFrameAudio, &got, &packet);
+			int data_size = av_samples_get_buffer_size(NULL,pCodecCtxAudio->channels,pFrameAudio->nb_samples,pCodecCtxAudio->sample_fmt, 1);
+			printf("data_size = %d\n", data_size);
 			if (data == NULL)
 			{
 				printf("malloc\n");
 				data = (char *)malloc(data_size);
 			}
 			memset(data,0,data_size);
-			short *sample_buffer_L = pFrame->extended_data[0];
-			short *sample_buffer_R = pFrame->extended_data[1];
+			short *sample_buffer_L = (short *)(pFrameAudio->extended_data[0]);
+			short *sample_buffer_R = (short *)(pFrameAudio->extended_data[1]);
 
-			if (pFrame->format == AV_SAMPLE_FMT_S16P)
+			if (pFrameAudio->format == AV_SAMPLE_FMT_S16P)
 				printf("pFrame->format = AV_SAMPLE_FMT_S16P\n");
-			
 
 			FILE *fp = fopen("./demo.pcm", "ab+");
 			
@@ -627,6 +694,26 @@ int main(int argc, char **argv)
 			free (data);
 			data = NULL;
 		}
+#if 1
+		//found the  video frame !!!	
+		if (packet.stream_index == videoStream)		
+		{		
+			int got;		
+			int i;				
+			avcodec_decode_video2(pCodecCtxVideo, pFrameVideo,&got_picture,&packet);		
+			data = (char *)malloc(pFrameVideo->width * pFrameVideo->height);	
+			memset(data,0,pFrameVideo->width * pFrameVideo->height);		
+			printf("pFrameVideo->width = %d\n", pFrameVideo->width);	
+			printf("pFrameVideo->height = %d\n", pFrameVideo->height);			
+			printf("pFrameVideo->linesize[0] = %d\n", pFrameVideo->linesize[0]);		
+			printf("pFrameVideo->linesize[1] = %d\n", pFrameVideo->linesize[1]);		
+			printf("pFrameVideo->linesize[2] = %d\n", pFrameVideo->linesize[2]);		
+			//catch the YUV420P data		
+			saveYUV420P(pFrameVideo->data[0], pFrameVideo->linesize[0], pCodecCtxVideo->width, pCodecCtxVideo->height);      //Y: 4		
+			saveYUV420P(pFrameVideo->data[1], pFrameVideo->linesize[1], pCodecCtxVideo->width/2, pCodecCtxVideo->height/2);    //U : 1		
+			saveYUV420P(pFrameVideo->data[2], pFrameVideo->linesize[2], pCodecCtxVideo->width/2, pCodecCtxVideo->height/2);    //V : 1	
+		}
+#endif		
 	}
 	
 	return 0;
