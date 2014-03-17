@@ -38,7 +38,7 @@
 #include "cmdutils.h"
 #include <assert.h>
 
-#include "demo.h"
+//#include "demo.h"
 #include <linux/soundcard.h>
 #include <linux/fb.h>
 #include <stdlib.h>
@@ -632,7 +632,8 @@ int main(int argc, char **argv)
 
     av_log_set_callback(log_callback);
     av_log_set_level(50);
-
+	avformat_network_init();
+	
     if (Myparse_option(&opt, argc, argv) < 0 || (strlen(opt.finput) == 0))
     {
         Myshow_help(argv[0]);
