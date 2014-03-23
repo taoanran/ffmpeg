@@ -45,6 +45,20 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/fb.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+
+#include <libswscale/swscale_internal.h>
+
+#define SAVE_RGB_BMP 0
+#define SAVE_YUV420P 0
+
 #define DECODED_AUDIO_BUFFER_SIZE 192000
 struct options
 {
@@ -315,6 +329,106 @@ static int find_audio_stream(AVFormatContext* pCtx)
 
 	return audioStream;
 }
+//save the  BMP ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#pragma pack(1)
+// 2byte
+typedef struct bmp_magic
+{
+ unsigned char magic[2];
+}magic_t;
+
+
+// 4 * 3 = 12 Byte
+typedef struct bmp_header
+{
+ unsigned int file_size;    //file size in Byte ,w * h * 3 + 54
+ unsigned short creater1;   //0
+ unsigned short creater2;   //0
+ unsigned int offset;   //offset to image data: 54D, 36H
+}header_t ;
+
+//10 * 4 =  40 Byte
+typedef struct bmp_info
+{
+ unsigned int header_size; //info size in bytes, equals 4o D, or 28H
+ unsigned int width;     //file wideth in pide
+ unsigned int height;    //file height in pide
+  
+ unsigned short nplanes;   //number of clor planes , 1
+ unsigned short bitspp;    //bits per pidel, 24d, 18h
+  
+ unsigned int compress_type;  //compress type,default 0
+ unsigned int image_size;   //image size in Byte.  w * h * 3
+ unsigned int hres;      //pideles per meter, 0
+ unsigned int vres;      //pideles per meter, 0
+ unsigned int ncolors;   //number of colors, 0
+ unsigned int nimpcolors; //important colors, 0
+}info_t;
+
+
+int gen_bmp_header(unsigned char *head,unsigned w, unsigned h,unsigned bytepp)
+{
+ if(head==NULL)
+ 	return -1;
+ magic_t magic;
+ info_t info;
+ header_t header;
+ 
+ magic.magic[0] = 'B';
+ magic.magic[1] = 'M';
+
+ header.file_size = (w * h * bytepp + 54);
+ header.creater1 = 0;
+ header.creater2 = 0;
+ header.offset = (54);
+
+ info.header_size = (40);
+ info.width = (w);
+ info.height = (h);
+ info.nplanes = (1);
+ info.bitspp = (bytepp * 8);
+ info.compress_type = 0;
+ info.image_size = (w * h * bytepp);
+ info.hres = 0;
+ info.vres = 0;
+ info.ncolors = 0;
+ info.nimpcolors = 0;
+
+ unsigned char *p=head;
+ memcpy(p,&magic,sizeof(magic));
+ p+=sizeof(magic);
+ memcpy(p,&header,sizeof(header));
+ p+=sizeof(header);
+ memcpy(p,&info,sizeof(info));
+ return 0;
+} 
+
+
+static void saveBitMap(AVFrame *pFrameRGB, int width, int height, int index, int bpp)
+{
+//saveBitMap(fb_varinfo.xres,fb_varinfo.yres,fb_varinfo.bits_per_pixel/8, fb_addr, fb_size);
+	unsigned char head[54];
+	int i;
+	FILE *fp = NULL;
+	memset(head, 0, 54);
+	
+	gen_bmp_header(head,width, height,bpp/8);
+
+	fp = fopen("./1.bmp", "w+");
+	if (fp == NULL)
+	{
+			av_log(NULL, AV_LOG_INFO, "fopen BMP error\n");
+			return ;
+	}
+
+	fwrite(head, 54, 1, fp);
+	fwrite(pFrameRGB->data[0], width*height*bpp/8, 1, fp);//all the RGB data is in the AVFrame->data[0] !!!
+
+	fclose(fp);
+	fp = NULL;
+}
+//save the  BMP ---------------------------------------------------
+
 
 #define CATCH_YUV_FILE "./demoMy.yuv"
 static void saveYUV420P(unsigned char *buf, int wrap, int xsize ,int ysize)
@@ -596,6 +710,7 @@ int main(int argc, char **argv)
     AVPacket packet;
     AVFrame *pFrameAudio = 0;//audio
 	AVFrame *pFrameVideo = 0;//video
+	AVFrame *pFrameRGB = 0;//save the RGB  
     FILE *fpo1 = NULL;
     FILE *fpo2 = NULL;
     int nframe;
@@ -714,6 +829,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	pFrameVideo = avcodec_alloc_frame();
+	pFrameRGB = avcodec_alloc_frame();
 //------------------------------------------------------------------------//
 #endif	
 #if 0
@@ -733,10 +849,10 @@ int main(int argc, char **argv)
     } 
 #endif			
 
-
+	int tmp = 0;
 	while(av_read_frame(pCtx, &packet) >= 0)
 	{
-#if 1	
+#if 0	
 		//found the  audio frame !!!
 		if (packet.stream_index == audioStream)
 		{
@@ -764,11 +880,11 @@ int main(int argc, char **argv)
 				printf("pFrame->format = AV_SAMPLE_FMT_S16P\n");
 				sample_buffer_L = (short *)(pFrameAudio->extended_data[0]);
 				sample_buffer_R = (short *)(pFrameAudio->extended_data[1]);
-				saveAV_SAMPLE_FMT_S16P(data, data_size, sample_buffer_L, sample_buffer_R);
+				//saveAV_SAMPLE_FMT_S16P(data, data_size, sample_buffer_L, sample_buffer_R);
 			}
 			else if(pFrameAudio->format == AV_SAMPLE_FMT_FLTP)
 			{
-				convertAV_SAMPLE_FMT_FLTP_TO_S16P(pFrameAudio);
+				//convertAV_SAMPLE_FMT_FLTP_TO_S16P(pFrameAudio);
 			}
 #if 0
 			FILE *fp = fopen("./demo.pcm", "ab+");
@@ -806,18 +922,30 @@ int main(int argc, char **argv)
 		{		
 			int got;		
 			int i;				
-			avcodec_decode_video2(pCodecCtxVideo, pFrameVideo,&got_picture,&packet);				
-			printf("pFrameVideo->width = %d\n", pFrameVideo->width);	
-			printf("pFrameVideo->height = %d\n", pFrameVideo->height);			
-			printf("pFrameVideo->linesize[0] = %d\n", pFrameVideo->linesize[0]);		
-			printf("pFrameVideo->linesize[1] = %d\n", pFrameVideo->linesize[1]);		
-			printf("pFrameVideo->linesize[2] = %d\n", pFrameVideo->linesize[2]);		
-			//catch the YUV420P data		
-			saveYUV420P(pFrameVideo->data[0], pFrameVideo->linesize[0], pCodecCtxVideo->width, pCodecCtxVideo->height);      //Y: 4		
-			saveYUV420P(pFrameVideo->data[1], pFrameVideo->linesize[1], pCodecCtxVideo->width/2, pCodecCtxVideo->height/2);    //U : 1		
-			saveYUV420P(pFrameVideo->data[2], pFrameVideo->linesize[2], pCodecCtxVideo->width/2, pCodecCtxVideo->height/2);    //V : 1	
-
-			
+			avcodec_decode_video2(pCodecCtxVideo, pFrameVideo,&got_picture,&packet);			
+			printf("pFrameVideo->width = %d\n", pFrameVideo->width);
+			printf("pFrameVideo->height = %d\n", pFrameVideo->height);
+			printf("pFrameVideo->linesize[0] = %d\n", pFrameVideo->linesize[0]);
+			printf("pFrameVideo->linesize[1] = %d\n", pFrameVideo->linesize[1]);
+			printf("pFrameVideo->linesize[2] = %d\n", pFrameVideo->linesize[2]);
+#if SAVE_YUV420P			
+			//catch the YUV420P data
+			saveYUV420P(pFrameVideo->data[0], pFrameVideo->linesize[0], pCodecCtxVideo->width, pCodecCtxVideo->height);      //Y: 4
+			saveYUV420P(pFrameVideo->data[1], pFrameVideo->linesize[1], pCodecCtxVideo->width/2, pCodecCtxVideo->height/2);    //U : 1
+			saveYUV420P(pFrameVideo->data[2], pFrameVideo->linesize[2], pCodecCtxVideo->width/2, pCodecCtxVideo->height/2);    //V : 1
+#endif			
+#if SAVE_RGB_BMP
+			//yuv420p -> rgb32
+			int PictureSize = avpicture_get_size (AV_PIX_FMT_ARGB, pCodecCtxVideo->width, pCodecCtxVideo->height);
+			void *buf = (uint8_t*)av_malloc(PictureSize);
+			avpicture_fill ( (AVPicture *)pFrameRGB, buf, AV_PIX_FMT_ARGB, pCodecCtxVideo->width, pCodecCtxVideo->height);
+			SwsContext* pSwsCxt = sws_getContext(pFrameVideo->width,pFrameVideo->height,pCodecCtxVideo->pix_fmt,
+				pFrameVideo->width, pFrameVideo->height,AV_PIX_FMT_ARGB, SWS_BILINEAR,NULL,NULL,NULL);
+			sws_scale(pSwsCxt,pFrameVideo->data,pFrameVideo->linesize,0,pFrameVideo->height,pFrameRGB->data, pFrameRGB->linesize);
+			av_log(NULL, AV_LOG_INFO, "pFrameRGB->linesize[0] = %d\n", pFrameRGB->linesize[0]);
+			//save the ARGB into BMP file
+			saveBitMap (pFrameRGB, pCodecCtxVideo->width, pCodecCtxVideo->height, tmp++, 32);
+#endif			
 		}
 #endif		
 	}
