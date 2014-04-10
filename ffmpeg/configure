@@ -4142,6 +4142,8 @@ enabled extra_warnings && check_cflags -Winline
 # add some linker flags
 check_ldflags -Wl,--warn-common
 check_ldflags -Wl,-rpath-link=libpostproc:libswresample:libswscale:libavfilter:libavdevice:libavformat:libavcodec:libavutil:libavresample
+#taoanran add for link the share-lib
+check_ldflags -Wl,-rpath=libavdevice:libavfilter:libswscale:libswresample:libavformat:libavcodec:libavutil
 test_ldflags -Wl,-Bsymbolic && append SHFLAGS -Wl,-Bsymbolic
 
 enabled xmm_clobber_test &&
